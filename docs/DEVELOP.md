@@ -8,7 +8,7 @@ pip install -e weditor
 `-e`这个选项可以将本仓库的 `server` 包直接关联到python的`site-packages`中。
 
 
-修改完后，直接运行`python -m server`调试
+修改完后，直接运行 `python -m server` 调试；`python -m weditor` 为兼容入口（内部转发到 `server.__main__:main`），两者等价。安装后也可直接用 `weditor` 命令。
 
 ## 前端（Vue 3，零构建）
 

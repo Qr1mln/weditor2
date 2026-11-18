@@ -523,7 +523,7 @@ server/
 tests/  docs/
 ```
 
-启动方式：`python -m server`（原 `python -m weditor` 不再可用）。安装后的命令行命令仍叫 `weditor`（`setup.cfg` 的 console_scripts 指向 `server.__main__:main`）。页面 URL 仍以 `/static/` 为前缀（Tornado `static_url_prefix` 默认值），物理目录为 `weditor/`。
+启动方式：`python -m server` 为主；`python -m weditor` 作为兼容入口保留（`weditor/__main__.py` 转发到 `server.__main__:main`）。安装后命令行命令 `weditor` 亦可用（`setup.cfg` 的 console_scripts 指向 `server.__main__:main`）。页面 URL 仍以 `/static/` 为前缀（Tornado `static_url_prefix` 默认值），物理目录为 `weditor/`。
 
 配套改动：
 
