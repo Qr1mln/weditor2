@@ -38,8 +38,7 @@ from tornado.log import enable_pretty_logging
 from .web.handlers.page import (
     BaseHandler, DeviceConnectHandler,
     DeviceHierarchyHandler, DeviceHierarchyHandlerV2, DeviceScreenshotHandler,
-    DeviceTemplateHandler, DeviceWidgetListHandler, FrontendHandler,
-    VersionHandler, WidgetPreviewHandler)
+    DeviceTemplateHandler, FrontendHandler, VersionHandler)
 from .web.handlers.shell import PythonShellHandler
 from .web.utils import current_ip, tostr
 from .web.version import __version__
@@ -98,18 +97,11 @@ def make_app(settings={}):
             (r"/api/v1/devices/([^/]+)/screenshot", DeviceScreenshotHandler),
             (r"/api/v1/devices/([^/]+)/hierarchy", DeviceHierarchyHandler),
             # (r"/api/v1/devices/([^/]+)/exec", DeviceCodeDebugHandler),
-            (r"/api/v1/devices/([^/]+)/widget", DeviceWidgetListHandler),
-            (r"/api/v1/widgets", DeviceWidgetListHandler),  # add widget
-            (r"/api/v1/widgets/([^/]+)", DeviceWidgetListHandler),
             # v2
             (r"/api/v2/devices/([^/]+)/hierarchy", DeviceHierarchyHandlerV2),
-            # widgets
-            (r"/widgets/([^/]+)", WidgetPreviewHandler),
+            # image templates (still used by the frontend "template" tap mode)
             (r"/widgets/templates/(.+)", tornado.web.StaticFileHandler, {
                 "path": os.path.expanduser("~/.weditor/templates")
-            }),
-            (r"/widgets/(.+/.+)", tornado.web.StaticFileHandler, {
-                "path": "./widgets"
             }),
             # (r"/ws/v1/build", BuildWSHandler),
             (r"/ws/v1/python", PythonShellHandler),
@@ -174,7 +166,6 @@ def run_web(debug=False, port=17310, open_browser=False, force_quit=False):
 
     application = make_app({
         'static_path': os.path.join(__dir__, 'static'),
-        'template_path': os.path.join(__dir__, 'templates'),
         'debug': debug,
     })
     print('listening on http://%s:%d' % (current_ip(), port))
