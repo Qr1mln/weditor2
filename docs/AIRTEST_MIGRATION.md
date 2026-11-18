@@ -64,7 +64,7 @@ Tornado (weditor/__main__.py:88-116 路由表, 默认端口 17310; 第二期起�
 | 层次 | 文件与位置 | u2 承担的职责 | 替换难度 |
 | --- | --- | --- | --- |
 | 依赖声明 | `requirements.txt:9` | `uiautomator2>=2.10.1` | 低 |
-| 设备层 | `weditor/web/device.py:7` | `import uiautomator2 as u2` | 低 |
+| 设备层 | `server/device.py:7` | `import uiautomator2 as u2` | 低 |
 | 设备层 | `device.py:59-89` `_AndroidUiautomatorDevice` | `u2.connect()`、`settings[fallback_to_blank_screenshot]`、`screenshot()`、`dump_hierarchy`、`app_current()`、`window_size()`、`device` 属性 | 中（截图返回类型不同） |
 | 设备层 | `device.py:128-152` | 按 `PlatformEnum.AndroidUIAutomator2` 分发并缓存设备 | 低 |
 | 控件树 | `uidumplib.py:92-136` | `get_android_hierarchy(d)` 调 `d.dump_hierarchy(compressed=False, pretty=False)`；`android_hierarchy_to_json()` 解析 u2 的 XML 属性名 | 中（依赖 XML 属性名一致） |
@@ -144,7 +144,7 @@ Tornado (weditor/__main__.py:88-116 路由表, 默认端口 17310; 第二期起�
 
 ## 5. 目标设计：设备抽象层
 
-在 `weditor/web/device.py` 中把 `DeviceMeta` 从"只提供截图和控件树"扩展为"编辑器所需的全部设备能力"，使 handler 层与具体库解耦：
+在 `server/device.py` 中把 `DeviceMeta` 从"只提供截图和控件树"扩展为"编辑器所需的全部设备能力"，使 handler 层与具体库解耦：
 
 ```python
 class DeviceMeta(ABC):
@@ -283,11 +283,11 @@ class DeviceMeta(ABC):
 | 文件 | 改动要点 | 阶段 |
 | --- | --- | --- |
 | `requirements.txt` | 删 `uiautomator2` 与 `adbutils`，加 `airtest`，补 `requests`（iOS 仍用 `facebook-wda`、`tidevice`） | MVP-1 |
-| `weditor/web/proto.py` | 新增 `AndroidAirTest = "Android"`，移除 `AndroidUIAutomator2`；iOS 枚举保留 | MVP-1 |
-| `weditor/web/device.py` | 删 `import u2`/`import adbutils`；新增 `_AndroidAirTestDevice`；`_AndroidADB` 改用 airtest adb；扩展 `DeviceMeta`；deviceId 小写化 | MVP-1 |
-| `weditor/web/uidumplib.py` | `get_android_hierarchy()` 改为接收 XML 字符串；属性别名表保持不动 | MVP-1 |
-| `weditor/web/ipyshell-console.py` | 预加载 `airtest.core.api` 替换 `uiautomator2`（不引入 Poco） | MVP-1 |
-| `weditor/web/handlers/page.py` | `:82` 平台判断改为新枚举；截图 handler 保持不变（靠适配层）；widget 模板去 xpath 语义 | MVP-1/3 |
+| `server/proto.py` | 新增 `AndroidAirTest = "Android"`，移除 `AndroidUIAutomator2`；iOS 枚举保留 | MVP-1 |
+| `server/device.py` | 删 `import u2`/`import adbutils`；新增 `_AndroidAirTestDevice`；`_AndroidADB` 改用 airtest adb；扩展 `DeviceMeta`；deviceId 小写化 | MVP-1 |
+| `server/uidumplib.py` | `get_android_hierarchy()` 改为接收 XML 字符串；属性别名表保持不动 | MVP-1 |
+| `server/ipyshell-console.py` | 预加载 `airtest.core.api` 替换 `uiautomator2`（不引入 Poco） | MVP-1 |
+| `server/handlers/page.py` | `:82` 平台判断改为新枚举；截图 handler 保持不变（靠适配层）；widget 模板去 xpath 语义 | MVP-1/3 |
 | `weditor/static/js/index.js` | preload、clearCode、按键/输入/点击、补全；删除 XPath/选择器生成与 `xpathCompletions`（`:112-176, 336-341, 390-395, 584-662, 944-971, 1069-1088, 1125-1186`）；新增图像模板模式 | MVP-1~3 |
 | `weditor/templates/index.html` | 平台下拉改为 "Android AirTest"、文档链接改为 airtest | MVP-1/4 |
 | `README.md` / `README_ZH.md` / `DEVELOP.md` / `API.md` | 依赖与 API 文案，按实际路由校正 | MVP-4 |
@@ -461,7 +461,7 @@ class DeviceMeta(ABC):
 | `web/src/api.js` | HTTP 封装（替换 `$.ajax`） | FE-1 |
 | `web/src/codegen/*` | 复用第一期抽出的 airtest 代码生成纯函数 | FE-4 |
 | `weditor/__main__.py` | `static_path` 指向 Vite 产物；可移除 CDN 代理路由注册 | FE-0/4 |
-| `weditor/web/handlers/proxy.py` | 不再需要 CDN 代理时可删 | FE-4 |
+| `server/handlers/proxy.py` | 不再需要 CDN 代理时可删 | FE-4 |
 | 删除 `static/js/index.js`、`static/js/common.js`、`static/libs/vue-2.5.16/`、`static/cdn_libraries/` | 旧栈依赖清理 | FE-4 |
 | `DEVELOP.md` / `README*` | 补前端构建与运行说明 | FE-4 |
 
@@ -505,3 +505,28 @@ class DeviceMeta(ABC):
 ### 12.4 维护提示
 
 vendor 是提交进仓库的预构建二进制，升级库版本需手动替换对应文件。Monaco 走 AMD `loader.js`，worker 路径由 `app.js` 的 `window.MonacoEnvironment.getWorkerUrl` 指向本地 `vendor/monaco/vs/base/worker/workerMain.js`。
+
+### 12.5 目录重构：weditor/web → server（2026-11-18）
+
+后端核心代码从 `weditor/web/` 迁出为**顶层包** `server/`，与 `weditor/` 同级：
+
+```
+server/
+├── device.py  proto.py  uidumplib.py  utils.py  version.py
+├── ipyshell-console.py
+└── handlers/
+    ├── page.py
+    └── shell.py
+```
+
+配套改动：
+
+| 位置 | 改动 |
+| --- | --- |
+| `weditor/__main__.py` | 导入由 `from .web.* ` 改为 `from server.*` |
+| `tests/*.py` | `from weditor.web import X` → `from server import X` |
+| `setup.cfg` | `[files] packages` 增加 `server`；顶层包必须声明，否则 `pip install` 后缺失 |
+| `server/handlers/page.py` | `FrontendHandler` 静态路径改为 `dirname(__file__)×3 + weditor/static/index.html`（前端产物仍在 `weditor` 包内） |
+| `server/handlers/shell.py` | `ROOT_DIR/../ipyshell-console.py` 无需改动（仍指向 `server/ipyshell-console.py`） |
+
+注意：`server` 是通用顶层包名，若环境中已存在同名包可能冲突；`python -m weditor` 需项目根位于 `sys.path`（源码运行与 `pip install -e` 天然满足，普通安装由 `setup.cfg` 打包 `server` 保证）。

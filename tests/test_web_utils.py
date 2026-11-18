@@ -7,7 +7,7 @@
 import pathlib
 import re
 import pytest
-from weditor.web import utils
+from server import utils
 
 @pytest.fixture
 def hello_path(tmp_path: pathlib.Path) -> pathlib.Path:

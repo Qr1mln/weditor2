@@ -1,5 +1,5 @@
 import pytest
-from weditor.web.proto import PlatformEnum
+from server.proto import PlatformEnum
 
 
 def test_PlatformEnum():

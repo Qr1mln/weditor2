@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """Tests for Android uiautomator XML -> JSON tree conversion (airtest dump output)."""
-from weditor.web import uidumplib
+from server import uidumplib
 
 
 def _tree():

@@ -5,13 +5,13 @@ from unittest import mock
 import numpy as np
 from PIL import Image
 
-from weditor.web import device as devmod
-from weditor.web.proto import PlatformEnum
+from server import device as devmod
+from server.proto import PlatformEnum
 
 
 class FakeAdb:
     def shell(self, cmd):
-        from weditor.web import uidumplib
+        from server import uidumplib
         return uidumplib.sample_android_page_xml
 
 
