@@ -104,8 +104,15 @@ def _parse_uiautomator_node(node):
     return ks
 
 
-def get_android_hierarchy(d):
-    page_xml = d.dump_hierarchy(compressed=False, pretty=False).encode('utf-8')
+def get_android_hierarchy(page_xml):
+    """Convert Android uiautomator XML to JSON tree.
+
+    Args:
+        page_xml: XML content as ``str`` or ``bytes``. AirTest adapter passes
+            the raw output of ``adb shell uiautomator dump``.
+    """
+    if isinstance(page_xml, str):
+        page_xml = page_xml.encode('utf-8')
     return android_hierarchy_to_json(page_xml)
 
 

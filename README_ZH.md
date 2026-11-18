@@ -18,14 +18,14 @@ Screenshot
 依赖项目
 
 - Python3.6+
-  - [uiautomator2](https://github.com/openatx/uiautomator2)
-  - [facebook-wda](https://github.com/openatx/facebook-wda)
+  - [airtest](https://github.com/AirtestProject/Airtest) (Android)
+  - [facebook-wda](https://github.com/openatx/facebook-wda) (iOS)
 
 
 > Only tested in `Google Chrome`, _IE_ seems not working well.
 
 ```bash
-pip3 install -U weditor # uiautomator2, facebook-wda会被作为依赖一并安装上去
+pip3 install -U weditor # airtest, facebook-wda会被作为依赖一并安装上去
 ```
 
 如果要运行开发版本，安装方法如下

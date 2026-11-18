@@ -4,6 +4,6 @@
 import enum
 
 class PlatformEnum(str, enum.Enum):
-    AndroidUIAutomator2 = "Android"
+    AndroidAirTest = "Android"
     AndroidADB = "AndroidADB"
     IOS = "iOS"

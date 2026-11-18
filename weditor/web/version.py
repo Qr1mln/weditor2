@@ -2,7 +2,7 @@
 #
 
 try:
-    import pkg_resources
-    __version__ = pkg_resources.get_distribution("weditor").version
-except pkg_resources.DistributionNotFound:
+    from importlib.metadata import version as _dist_version
+    __version__ = _dist_version("weditor")
+except Exception:
     __version__ = "unknown"

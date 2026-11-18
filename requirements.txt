@@ -6,5 +6,6 @@ cached_property
 pywin32; sys_platform == 'win32'
 
 # third-party dependencies
-uiautomator2>=2.10.1
+airtest>=1.2.0
 facebook-wda>=1.0.5
+requests

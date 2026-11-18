@@ -38,7 +38,8 @@ from tornado.log import enable_pretty_logging
 from .web.handlers.page import (
     BaseHandler, DeviceConnectHandler,
     DeviceHierarchyHandler, DeviceHierarchyHandlerV2, DeviceScreenshotHandler,
-    DeviceWidgetListHandler, MainHandler, VersionHandler, WidgetPreviewHandler)
+    DeviceTemplateHandler, DeviceWidgetListHandler, MainHandler,
+    VersionHandler, WidgetPreviewHandler)
 from .web.handlers.proxy import StaticProxyHandler
 from .web.handlers.shell import PythonShellHandler
 from .web.utils import current_ip, tostr
@@ -92,6 +93,7 @@ def make_app(settings={}):
             (r"/api/v1/version", VersionHandler),
             (r"/api/v1/connect", DeviceConnectHandler),
             (r"/api/v1/crop", CropHandler),
+            (r"/api/v1/template", DeviceTemplateHandler),
             (r"/api/v1/devices/([^/]+)/screenshot", DeviceScreenshotHandler),
             (r"/api/v1/devices/([^/]+)/hierarchy", DeviceHierarchyHandler),
             # (r"/api/v1/devices/([^/]+)/exec", DeviceCodeDebugHandler),
@@ -102,6 +104,9 @@ def make_app(settings={}):
             (r"/api/v2/devices/([^/]+)/hierarchy", DeviceHierarchyHandlerV2),
             # widgets
             (r"/widgets/([^/]+)", WidgetPreviewHandler),
+            (r"/widgets/templates/(.+)", tornado.web.StaticFileHandler, {
+                "path": os.path.expanduser("~/.weditor/templates")
+            }),
             (r"/widgets/(.+/.+)", tornado.web.StaticFileHandler, {
                 "path": "./widgets"
             }),
@@ -145,7 +150,7 @@ def cmd_quit(port=17310):
             logger.warning("Pidfile: %s not exist", PID_FILEPATH)
             return
         
-        with open(PIDFILEPATH, "r") as f:
+        with open(PID_FILEPATH, "r") as f:
             pid = int(f.read())
             if os.name == "nt": # windows
                 subprocess.call(f"taskkill /PID {pid} /T /F") # /F: 强制 /T: 包含子进程

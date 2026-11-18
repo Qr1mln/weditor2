@@ -13,10 +13,12 @@
 # WRT:"hello"
 # EOF:1
 
+import base64
 import contextlib
 import linecache
 import json
 import os
+import subprocess
 import sys
 import traceback
 import time
@@ -109,6 +111,26 @@ def mock_stdout_stderr(prefix="WRT:"):
         sys.stderr = _stderr
 
 
+def input_text(value, dev=None):
+    """Type text (including CJK) via Yosemite IME's ADB_INPUT_B64 broadcast.
+
+    airtest's adb.shell() mangles non-ASCII arguments (UTF-8 read as GBK), so
+    we call the adb binary directly with a pure-ASCII base64 payload instead.
+    Requires Yosemite IME enabled (airtest enables it on first text() call).
+    """
+    if dev is None:
+        from airtest.core.api import device as _dev
+        dev = _dev()
+    adb = dev.adb
+    payload = base64.b64encode(value.encode("utf-8")).decode("ascii")
+    cmd = [adb.adb_path, "-s", adb.serialno, "shell", "am", "broadcast",
+           "-a", "ADB_INPUT_B64", "--es", "msg", payload]
+    result = subprocess.run(cmd, capture_output=True)
+    if result.returncode != 0:
+        raise RuntimeError("adb broadcast failed: " + result.stderr.decode("utf-8", "replace"))
+    return value
+
+
 def stdin_readline():
     try:
         line = sys.stdin.readline().rstrip()
@@ -133,9 +155,18 @@ def main():
     }
 
     with mock_stdout_stderr() as (stdout, stderr):
-        # preload
-        import uiautomator2
-        _globals['uiautomator2'] = uiautomator2
+        # preload airtest into the REPL global namespace
+        import airtest
+        import airtest.core.api as _atapi
+        _globals['airtest'] = airtest
+        _globals['input_text'] = input_text
+        for _name in ('connect_device', 'device', 'snapshot', 'touch',
+                      'double_click', 'swipe', 'wait', 'keyevent', 'text',
+                      'sleep', 'install', 'uninstall', 'start_app', 'stop_app',
+                      'clear_app', 'Template', 'exists', 'find_all', 'log',
+                      'logwrap', 'assert_exists', 'assert_not_exists'):
+            if hasattr(_atapi, _name):
+                _globals[_name] = getattr(_atapi, _name)
 
         sys.settrace(gen_tracefunc("<string>", stdout))
         stdout.write("DBG:Python (pid: {})\n".format(os.getpid()))

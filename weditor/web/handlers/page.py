@@ -5,6 +5,7 @@ import base64
 import io
 import json
 import os
+import time
 import traceback
 
 import tornado
@@ -79,7 +80,7 @@ class DeviceConnectHandler(BaseHandler):
                 "deviceId": id,
                 'success': True,
             }
-            if platform == "android":
+            if platform in (PlatformEnum.AndroidAirTest, PlatformEnum.AndroidADB):
                 # ws_addr = get_device(id).device.address.replace("http://", "ws://") # yapf: disable
                 ret['screenWebSocketUrl'] = None #ws_addr + "/minicap"
             self.write(ret)
@@ -136,10 +137,12 @@ class DeviceWidgetListHandler(BaseHandler):
                   encoding="utf-8") as f:
             f.write(data['hierarchy'])
 
-        # update meta
+        # update meta (airtest: no xpath semantics, keep bounds/template info)
         meta_path = pathjoin(target_dir, "meta.json")
         meta = self.json_parse(meta_path)
-        meta["xpath"] = data['xpath']
+        if 'bounds' in data:
+            lx, ly, rx, ry = data['bounds']
+            meta["rect"] = dict(x=lx, y=ly, width=rx-lx, height=ry-ly)
         with open(meta_path, "w", encoding="utf-8") as f:
             f.write(json.dumps(meta, indent=4, ensure_ascii=False))
 
@@ -174,7 +177,7 @@ class DeviceWidgetListHandler(BaseHandler):
             "class_name": data['className'],
             "rect": dict(x=lx, y=ly, width=rx-lx, height=ry-ly),
             "window_size": data['windowSize'],
-            "xpath": data['xpath'],
+            "template_path": os.path.abspath(pathjoin(target_dir, "template.jpg")).replace("\\", "/"),
             "target_image": {
                 "size": [rx - lx, ry - ly],
                 "url": f"http://localhost:17310/widgets/{widget_id}/template.jpg",
@@ -200,6 +203,41 @@ class DeviceWidgetListHandler(BaseHandler):
             "note": data['text'] or data['description'],  # 备注
             "data": widget_data,
         })
+
+
+class DeviceTemplateHandler(BaseHandler):
+    """Crop a control region from a screenshot and save it as an airtest Template image."""
+
+    STORE_DIR = os.path.expanduser("~/.weditor/templates")
+
+    def post(self):
+        try:
+            data = json_decode(self.request.body)
+            image_fd = io.BytesIO(base64.b64decode(data['screenshot']))
+            im = Image.open(image_fd).convert("RGB")
+            lx, ly, rx, ry = data['bounds']
+            cropped = im.crop((lx, ly, rx, ry))
+
+            os.makedirs(self.STORE_DIR, exist_ok=True)
+            name = data.get('name') or ("tpl_%d" % int(time.time() * 1000))
+            name = ''.join(c if c.isalnum() or c in '-_' else '_' for c in name)
+            filename = name + ".png"
+            abs_path = os.path.abspath(os.path.join(self.STORE_DIR, filename))
+            cropped.save(abs_path)
+
+            url = "http://%s/widgets/templates/%s" % (
+                self.request.host, filename)
+            self.write({
+                "success": True,
+                "path": abs_path.replace("\\", "/"),
+                "filename": filename,
+                "url": url,
+                "size": [rx - lx, ry - ly],
+            })
+        except Exception as e:
+            logger.exception("create template failed")
+            self.set_status(500)
+            self.write({"success": False, "description": str(e)})
 
 
 class DeviceScreenshotHandler(BaseHandler):

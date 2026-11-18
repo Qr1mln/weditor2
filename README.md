@@ -18,8 +18,8 @@ Screenshot
 Dependencies
 
 - Python3.6+
-  - [uiautomator2](https://github.com/openatx/uiautomator2)
-  - [facebook-wda](https://github.com/openatx/facebook-wda)
+  - [airtest](https://github.com/AirtestProject/Airtest) (Android)
+  - [facebook-wda](https://github.com/openatx/facebook-wda) (iOS)
 
 
 > Only tested in `Google Chrome`, _IE_ seems not working well.
