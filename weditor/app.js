@@ -306,7 +306,6 @@
         splitting = false
         splitterActive.value = false
         document.body.style.userSelect = ''
-        document.body.style.cursor = ''
         document.removeEventListener('mousemove', resizeSplitter)
         document.removeEventListener('mouseup', stopSplitResize)
       }
@@ -317,7 +316,6 @@
         splitting = true
         splitterActive.value = true
         document.body.style.userSelect = 'none'
-        document.body.style.cursor = 'col-resize'
         document.addEventListener('mousemove', resizeSplitter)
         document.addEventListener('mouseup', stopSplitResize)
       }
