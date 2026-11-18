@@ -80,10 +80,13 @@ class PythonShellHandler(tornado.websocket.WebSocketHandler):
         atexit.register(self._tmpd.cleanup)
 
     def on_close(self):
-        logger.warning("websocket closed, cleanup")
+        logger.info("websocket closed, cleanup")
         self._tmpd.cleanup()
         atexit.unregister(self._tmpd.cleanup)
         IOLoop.current().add_callback(self.kill_process)
+
+    def on_error(self, status_code):
+        logger.warning("websocket error, status_code=%s", status_code)
 
     @property
     def _tmpdir(self) -> str:
@@ -185,13 +188,15 @@ class PythonShellHandler(tornado.websocket.WebSocketHandler):
                 signal.SIGINT)  # Linux is so simple
 
     async def open(self):
-        logger.debug("websocket opened")
-        logger.info("create process pid: %d", self.__process.pid)
+        logger.info("websocket opened, create process pid: %d", self.__process.pid)
         # self.write2({"method": "resetContent", "value": INIT_CODE})
         # self.write2({"method": "gotoLine", "value": 1})
         # await gen.sleep(.1)
 
     def write2(self, data):
+        method = data.get("method")
+        if method != "output":
+            logger.info("ws send: %s", method)
         self.write_message(json.dumps(data))
 
     def _adjust_code(self, code: str):
@@ -202,9 +207,12 @@ class PythonShellHandler(tornado.websocket.WebSocketHandler):
         return ''.join([line[space_len:] for line in lines])
 
     async def on_message(self, message):
-        # print("Receive:", message)
         data = json.loads(message)
         method, value = data['method'], data.get('value')
+        preview = value if isinstance(value, str) else str(value)
+        if len(preview) > 200:
+            preview = preview[:200] + "..."
+        logger.info("ws recv: %s %s", method, preview)
         if method == 'input':
             code = self._adjust_code(value)
             code = json.dumps(code) + "\n"

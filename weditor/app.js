@@ -42,9 +42,30 @@
       const selectedNode = ref(null)
       const hierarchyTree = ref([])
       const codeContainer = ref(null)
+      const screenAreaEl = ref(null)
+      const screenImgEl = ref(null)
+      const frameStyle = ref({})
+      const rightTab = ref('coding')
       let monacoEditor = null
 
       const selectedInfo = computed(() => selectedNode.value || {})
+
+      function fitScreen() {
+        const area = screenAreaEl.value
+        const img = screenImgEl.value
+        if (!area || !img || !img.naturalWidth || !img.naturalHeight) return
+        const aw = area.clientWidth
+        const ah = area.clientHeight
+        if (!aw || !ah) return
+        const ratio = img.naturalWidth / img.naturalHeight
+        let w = aw
+        let h = w / ratio
+        if (h > ah) {
+          h = ah
+          w = h * ratio
+        }
+        frameStyle.value = { width: Math.round(w) + 'px', height: Math.round(h) + 'px' }
+      }
 
       async function fetchVersion() {
         try {
@@ -56,11 +77,23 @@
       function shellConnect() {
         if (shell.ws && shell.ws.readyState <= 1) return
         const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
-        const ws = new WebSocket(`${proto}//${location.host}/ws/v1/python`)
+        const wsUrl = `${proto}//${location.host}/ws/v1/python`
+        console.log('[ws] connecting', wsUrl)
+        const ws = new WebSocket(wsUrl)
         shell.ws = ws
-        ws.onopen = () => { shell.wsOpen.value = true }
-        ws.onclose = () => { shell.wsOpen.value = false }
+        ws.onopen = () => {
+          console.log('[ws] open', wsUrl)
+          shell.wsOpen.value = true
+        }
+        ws.onerror = (ev) => {
+          console.error('[ws] error', ev)
+        }
+        ws.onclose = (ev) => {
+          console.warn('[ws] close', 'code=', ev.code, 'reason=', ev.reason, 'clean=', ev.wasClean)
+          shell.wsOpen.value = false
+        }
         ws.onmessage = (ev) => {
+          console.log('[ws] recv', ev.data)
           try {
             const msg = JSON.parse(ev.data)
             if (msg.method === 'output') shell.output.value.push({ value: msg.value })
@@ -76,17 +109,22 @@
         if (!shell.ws || shell.ws.readyState !== 1) shellConnect()
         shell.running.value = true
         shell.output.value = []
-        shell.ws.send(JSON.stringify({ method: 'input', value: code }))
+        const payload = JSON.stringify({ method: 'input', value: code })
+        console.log('[ws] send', payload)
+        shell.ws.send(payload)
       }
 
       function shellInterrupt() {
-        if (shell.ws && shell.ws.readyState === 1)
+        if (shell.ws && shell.ws.readyState === 1) {
+          console.log('[ws] send', 'keyboardInterrupt')
           shell.ws.send(JSON.stringify({ method: 'keyboardInterrupt' }))
+        }
       }
 
       function shellRestart() {
         if (shell.ws && shell.ws.readyState === 1) {
           shell.restarting.value = true
+          console.log('[ws] send', 'restartKernel')
           shell.ws.send(JSON.stringify({ method: 'restartKernel' }))
         }
       }
@@ -233,16 +271,24 @@
         }
       })
 
+      watch(rightTab, () => {
+        nextTick(() => { if (monacoEditor) monacoEditor.layout() })
+      })
+
       onMounted(async () => {
         fetchVersion()
         await nextTick()
         await initMonaco()
+        window.addEventListener('resize', fitScreen)
+        if (window.ResizeObserver && screenAreaEl.value) {
+          new ResizeObserver(fitScreen).observe(screenAreaEl.value)
+        }
       })
 
       return {
         version, device, shell, editor, screenImg, selectedNode, selectedInfo,
-        hierarchyTree, codeContainer, treeLabel,
-        doConnect, dumpHierarchy, onNodeClick, doTap,
+        hierarchyTree, codeContainer, treeLabel, screenAreaEl, screenImgEl, frameStyle, rightTab,
+        doConnect, dumpHierarchy, onNodeClick, doTap, fitScreen,
         runCode, runSelected, runCurrentLine, shellInterrupt, shellRestart,
         genClearCode: C.genClearCode,
       }
@@ -251,70 +297,76 @@
       <el-container class="layout">
         <el-header class="header">
           <span class="brand">WEditor <small>{{ version }}</small></span>
-          <el-select v-model="device.platform.value" size="small" style="width: 150px">
-            <el-option label="Android AirTest" value="Android" />
-            <el-option label="Android ADB" value="AndroidADB" />
-            <el-option label="iOS" value="iOS" />
-          </el-select>
-          <el-input v-model="device.serial.value" size="small" placeholder="device url" style="width: 200px" />
-          <el-button size="small" type="primary" :loading="device.connecting.value" @click="doConnect">Connect</el-button>
-          <el-button size="small" :loading="device.loading.value" @click="dumpHierarchy">Dump</el-button>
-          <span v-if="device.deviceId.value" class="devid">{{ device.deviceId.value }}</span>
         </el-header>
 
         <el-container class="main">
-          <el-aside width="42%" class="pane screen-pane">
+          <el-aside width="50%" class="pane screen-pane">
+            <div class="screen-toolbar">
+              <el-select v-model="device.platform.value" size="small" style="width: 128px">
+                <el-option label="Android AirTest" value="Android" />
+                <el-option label="Android ADB" value="AndroidADB" />
+                <el-option label="iOS" value="iOS" />
+              </el-select>
+              <el-input v-model="device.serial.value" size="small" placeholder="device url" style="width: 150px" />
+              <el-button size="small" type="primary" :loading="device.connecting.value" @click="doConnect">Connect</el-button>
+              <el-button size="small" :loading="device.loading.value" @click="dumpHierarchy">Dump</el-button>
+              <span v-if="device.deviceId.value" class="devid">{{ device.deviceId.value }}</span>
+            </div>
             <div class="panel-title">Screen</div>
-            <div class="screen-area">
-              <img v-if="screenImg" :src="screenImg" class="screen-img" />
+            <div class="screen-area" ref="screenAreaEl">
+              <div v-if="screenImg" class="screen-frame" :style="frameStyle">
+                <img ref="screenImgEl" :src="screenImg" class="screen-img" @load="fitScreen" />
+              </div>
               <div v-else class="placeholder">No screenshot. Connect &amp; Dump.</div>
             </div>
           </el-aside>
 
-          <el-main class="pane attr-pane">
-            <div class="panel-title">
-              Selected Element
-              <el-button size="small" :disabled="!selectedNode" @click="doTap">Tap</el-button>
-            </div>
-            <el-descriptions :column="1" size="small" border v-if="selectedNode">
-              <el-descriptions-item label="class">{{ selectedInfo._type }}</el-descriptions-item>
-              <el-descriptions-item label="resource-id">{{ selectedInfo.resourceId }}</el-descriptions-item>
-              <el-descriptions-item label="text">{{ selectedInfo.text }}</el-descriptions-item>
-              <el-descriptions-item label="bounds">{{ JSON.stringify(selectedInfo.rect) }}</el-descriptions-item>
-            </el-descriptions>
-            <div v-else class="placeholder">Click a node in the hierarchy tree.</div>
-            <div class="code-hint">
-              <div>Generated code</div>
-              <el-input size="small" :model-value="editor.generatedCode.value" readonly />
-            </div>
-          </el-main>
-
-          <el-aside width="42%" class="pane code-pane">
-            <div class="panel-title">
-              Coding
-              <el-radio-group v-model="editor.tapMode.value" size="small">
-                <el-radio-button value="coordinate">坐标</el-radio-button>
-                <el-radio-button value="template">模板</el-radio-button>
-              </el-radio-group>
-              <el-button size="small" type="primary" @click="runCode">Run</el-button>
-              <el-button size="small" @click="runSelected">Sel</el-button>
-              <el-button size="small" @click="runCurrentLine">Line</el-button>
-              <el-button size="small" type="warning" :disabled="!shell.running.value" @click="shellInterrupt">Stop</el-button>
-              <el-button size="small" :loading="shell.restarting.value" @click="shellRestart">Restart</el-button>
-            </div>
-            <div ref="codeContainer" class="editor-container"></div>
-            <el-tabs class="bottom-tabs">
-              <el-tab-pane label="Hierarchy">
+          <el-aside width="50%" class="pane code-pane">
+            <el-tabs v-model="rightTab" class="right-tabs">
+              <el-tab-pane label="Coding" name="coding">
+                <div class="panel-title">
+                  Coding
+                  <el-radio-group v-model="editor.tapMode.value" size="small">
+                    <el-radio-button value="coordinate">坐标</el-radio-button>
+                    <el-radio-button value="template">模板</el-radio-button>
+                  </el-radio-group>
+                  <el-button size="small" type="primary" @click="runCode">Run</el-button>
+                  <el-button size="small" @click="runSelected">Sel</el-button>
+                  <el-button size="small" @click="runCurrentLine">Line</el-button>
+                  <el-button size="small" type="warning" :disabled="!shell.running.value" @click="shellInterrupt">Stop</el-button>
+                  <el-button size="small" :loading="shell.restarting.value" @click="shellRestart">Restart</el-button>
+                </div>
+                <div ref="codeContainer" class="editor-container"></div>
+              </el-tab-pane>
+              <el-tab-pane label="Hierarchy" name="hierarchy">
                 <el-tree :data="hierarchyTree" node-key="_id" default-expand-all
                   :props="{ children: 'children', label: (d) => treeLabel(d) }"
                   @node-click="onNodeClick" />
-              </el-tab-pane>
-              <el-tab-pane label="Console">
-                <pre class="console">{{ shell.output.value.map(o => o.value).join('') }}</pre>
+                <div class="selected-pane">
+                  <div class="panel-title">
+                    Selected Element
+                    <el-button size="small" :disabled="!selectedNode" @click="doTap">Tap</el-button>
+                  </div>
+                  <el-descriptions :column="1" size="small" border v-if="selectedNode">
+                    <el-descriptions-item label="class">{{ selectedInfo._type }}</el-descriptions-item>
+                    <el-descriptions-item label="resource-id">{{ selectedInfo.resourceId }}</el-descriptions-item>
+                    <el-descriptions-item label="text">{{ selectedInfo.text }}</el-descriptions-item>
+                    <el-descriptions-item label="bounds">{{ JSON.stringify(selectedInfo.rect) }}</el-descriptions-item>
+                  </el-descriptions>
+                  <div v-else class="placeholder">Click a node in the hierarchy tree.</div>
+                  <div class="code-hint">
+                    <div>Generated code</div>
+                    <el-input size="small" :model-value="editor.generatedCode.value" readonly />
+                  </div>
+                </div>
               </el-tab-pane>
             </el-tabs>
           </el-aside>
         </el-container>
+        <div class="console-panel">
+          <div class="panel-title">Console</div>
+          <pre class="console">{{ shell.output.value.map(o => o.value).join('') }}</pre>
+        </div>
       </el-container>
     `,
   }).use(window.ElementPlus).mount('#app')
