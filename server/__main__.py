@@ -165,7 +165,7 @@ def run_web(debug=False, port=17310, open_browser=False, force_quit=False):
         webbrowser.open(f'http://localhost:{port}', new=2)
 
     application = make_app({
-        'static_path': os.path.abspath(os.path.join(__dir__, '..', 'ateditor')),
+        'static_path': os.path.abspath(os.path.join(__dir__, '..', 'weditor')),
         'debug': debug,
     })
     print('listening on http://%s:%d' % (current_ip(), port))

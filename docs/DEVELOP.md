@@ -12,12 +12,12 @@ pip install -e weditor
 
 ## 前端（Vue 3，零构建）
 
-前端是纯静态文件，位于 `ateditor/`，用 `<script>` 标签直接引入本地 vendor 库（Vue 3 / Element Plus / Monaco 的预构建版），**无需 Node、npm 或任何构建步骤**。克隆仓库后 `python -m server` 即可打开完整页面，断网可用。
+前端是纯静态文件，位于 `weditor/`，用 `<script>` 标签直接引入本地 vendor 库（Vue 3 / Element Plus / Monaco 的预构建版），**无需 Node、npm 或任何构建步骤**。克隆仓库后 `python -m server` 即可打开完整页面，断网可用。
 
 文件结构：
 
 ```
-ateditor/
+weditor/
 ├── index.html                       # 主页面，script 标签引入下列资源
 ├── app.js                           # Vue 3 全局构建应用（原 App.vue + Pinia stores 合并）
 ├── codegen.js                       # airtest 代码生成（UMD：浏览器挂 window.Codegen，Node 可 require）
@@ -34,7 +34,7 @@ ateditor/
 运行 codegen 单测：
 
 ```bash
-node --test ateditor/codegen.test.js
+node --test weditor/codegen.test.js
 ```
 
 ## 网页的基本布局（旧版 Vue2，仅供历史参考）
