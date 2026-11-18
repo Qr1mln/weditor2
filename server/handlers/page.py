@@ -51,9 +51,9 @@ class FrontendHandler(BaseHandler):
     """Serve the zero-build Vue 3 single-page frontend (script-tag vendor libs)."""
 
     def get(self):
-        # __file__ = server/handlers/page.py -> dirname x2 = server/
-        page = os.path.join(os.path.dirname(os.path.dirname(
-            os.path.abspath(__file__))), "static", "index.html")
+        # __file__ = server/handlers/page.py -> dirname x3 = project root -> ateditor/
+        page = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__)))), "ateditor", "index.html")
         if not os.path.isfile(page):
             self.set_status(404)
             self.write({"error": "frontend index.html not found"})
