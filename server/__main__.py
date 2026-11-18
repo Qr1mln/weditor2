@@ -37,8 +37,8 @@ from tornado.log import enable_pretty_logging
 
 from .handlers.page import (
     BaseHandler, DeviceConnectHandler,
-    DeviceHierarchyHandler, DeviceHierarchyHandlerV2, DeviceScreenshotHandler,
-    DeviceTemplateHandler, FrontendHandler, VersionHandler)
+    DeviceGestureHandler, DeviceHierarchyHandler, DeviceHierarchyHandlerV2,
+    DeviceScreenshotHandler, DeviceTemplateHandler, FrontendHandler, VersionHandler)
 from .handlers.shell import PythonShellHandler
 from .utils import current_ip, tostr
 from .version import __version__
@@ -95,6 +95,7 @@ def make_app(settings={}):
             (r"/api/v1/crop", CropHandler),
             (r"/api/v1/template", DeviceTemplateHandler),
             (r"/api/v1/devices/([^/]+)/screenshot", DeviceScreenshotHandler),
+            (r"/api/v1/devices/([^/]+)/gesture", DeviceGestureHandler),
             (r"/api/v1/devices/([^/]+)/hierarchy", DeviceHierarchyHandler),
             # (r"/api/v1/devices/([^/]+)/exec", DeviceCodeDebugHandler),
             # v2

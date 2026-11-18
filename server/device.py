@@ -30,6 +30,12 @@ class DeviceMeta(metaclass=abc.ABCMeta):
     def device(self):
         pass
 
+    def tap(self, x, y):
+        raise NotImplementedError
+
+    def swipe(self, x1, y1, x2, y2, duration=0.5):
+        raise NotImplementedError
+
 
 def _xml_from_uiautomator(dev):
     """Run ``uiautomator dump`` through an airtest Android device and return XML text."""
@@ -89,6 +95,12 @@ class _AndroidAirTestDevice(DeviceMeta):
     def device(self):
         return self._d
 
+    def tap(self, x, y):
+        self._d.touch((x, y))
+
+    def swipe(self, x1, y1, x2, y2, duration=0.5):
+        self._d.swipe((x1, y1), (x2, y2), duration=duration)
+
 
 class _AndroidADB(DeviceMeta):
     """Android ADB-only device, using airtest's bundled ADB instead of adbutils."""
@@ -133,6 +145,12 @@ class _AndroidADB(DeviceMeta):
     def device(self):
         return self._d
 
+    def tap(self, x, y):
+        self._d.touch((x, y))
+
+    def swipe(self, x1, y1, x2, y2, duration=0.5):
+        self._d.swipe((x1, y1), (x2, y2), duration=duration)
+
 
 class _AppleDevice(DeviceMeta):
     def __init__(self, device_url):
@@ -166,6 +184,12 @@ class _AppleDevice(DeviceMeta):
     @property
     def device(self):
         return self._client
+
+    def tap(self, x, y):
+        self._client.tap(x, y)
+
+    def swipe(self, x1, y1, x2, y2, duration=0.5):
+        self._client.swipe(x1, y1, x2, y2)
 
 
 cached_devices = {}

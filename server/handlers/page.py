@@ -165,3 +165,30 @@ class DeviceScreenshotHandler(BaseHandler):
             self.set_status(500)  # Gone
             self.write({"description": traceback.format_exc()})
 
+
+class DeviceGestureHandler(BaseHandler):
+    """Run screen gestures directly on the connected device."""
+
+    def post(self, serial):
+        try:
+            data = json_decode(self.request.body)
+            action = data.get('action')
+            d = get_device(serial)
+            if action == 'tap':
+                d.tap(int(data['x']), int(data['y']))
+            elif action == 'swipe':
+                d.swipe(
+                    int(data['x1']),
+                    int(data['y1']),
+                    int(data['x2']),
+                    int(data['y2']),
+                    float(data.get('duration', 0.5)),
+                )
+            else:
+                raise ValueError('unsupported gesture action: %s' % action)
+            self.write({"success": True})
+        except Exception as e:
+            logger.exception("gesture failed")
+            self.set_status(500)
+            self.write({"success": False, "description": str(e)})
+
