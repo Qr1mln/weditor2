@@ -12,7 +12,7 @@ for easily use web browser to edit UI scripts.
 
 Screenshot
 
-![screenshot](./screenshot.jpg)
+![screenshot](screenshot.jpg)
 
 ## Installation
 Dependencies
@@ -67,7 +67,7 @@ To see more usage run `weditor -h`
 - Ctrl+Shift+Enter: Run selected code or current line if not selected
 
 ## For Developers
-See [DEVELOP.md](docs/DEVELOP.md)
+See [DEVELOP.md](DEVELOP.md)
 
 ## LICENSE
-[MIT](LICENSE)
+[MIT](../LICENSE)
