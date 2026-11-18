@@ -35,13 +35,13 @@ from tornado.concurrent import run_on_executor
 from tornado.escape import json_encode
 from tornado.log import enable_pretty_logging
 
-from server.handlers.page import (
+from .handlers.page import (
     BaseHandler, DeviceConnectHandler,
     DeviceHierarchyHandler, DeviceHierarchyHandlerV2, DeviceScreenshotHandler,
     DeviceTemplateHandler, FrontendHandler, VersionHandler)
-from server.handlers.shell import PythonShellHandler
-from server.utils import current_ip, tostr
-from server.version import __version__
+from .handlers.shell import PythonShellHandler
+from .utils import current_ip, tostr
+from .version import __version__
 
 enable_pretty_logging()
 

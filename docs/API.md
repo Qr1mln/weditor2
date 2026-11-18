@@ -12,7 +12,7 @@ pip install weditor
 
 # Usage
 ```
-python -m weditor
+python -m server
 ```
 
 # API

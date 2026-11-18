@@ -57,7 +57,7 @@ Tornado (weditor/__main__.py:88-116 路由表, 默认端口 17310; 第二期起�
       uiautomator2 / adbutils / facebook-wda → ADB → 设备
 ```
 
-关键入口：`weditor/__main__.py:220-251 main()` → `:158-191 run_web()` → `:88-116 make_app()`；前端在 `weditor/static/js/index.js:364-389 doConnect()` 触发连接。
+关键入口：`weditor/__main__.py:220-251 main()` → `:158-191 run_web()` → `:88-116 make_app()`；前端在 `server/static/js/index.js:364-389 doConnect()` 触发连接。
 
 ### 2.2 uiautomator2 使用面全景
 
@@ -288,7 +288,7 @@ class DeviceMeta(ABC):
 | `server/uidumplib.py` | `get_android_hierarchy()` 改为接收 XML 字符串；属性别名表保持不动 | MVP-1 |
 | `server/ipyshell-console.py` | 预加载 `airtest.core.api` 替换 `uiautomator2`（不引入 Poco） | MVP-1 |
 | `server/handlers/page.py` | `:82` 平台判断改为新枚举；截图 handler 保持不变（靠适配层）；widget 模板去 xpath 语义 | MVP-1/3 |
-| `weditor/static/js/index.js` | preload、clearCode、按键/输入/点击、补全；删除 XPath/选择器生成与 `xpathCompletions`（`:112-176, 336-341, 390-395, 584-662, 944-971, 1069-1088, 1125-1186`）；新增图像模板模式 | MVP-1~3 |
+| `server/static/js/index.js` | preload、clearCode、按键/输入/点击、补全；删除 XPath/选择器生成与 `xpathCompletions`（`:112-176, 336-341, 390-395, 584-662, 944-971, 1069-1088, 1125-1186`）；新增图像模板模式 | MVP-1~3 |
 | `weditor/templates/index.html` | 平台下拉改为 "Android AirTest"、文档链接改为 airtest | MVP-1/4 |
 | `README.md` / `README_ZH.md` / `DEVELOP.md` / `API.md` | 依赖与 API 文案，按实际路由校正 | MVP-4 |
 | `__main__.py` | `:148` `PIDFILEPATH` 拼写修复 | MVP-4 |
@@ -427,7 +427,7 @@ class DeviceMeta(ABC):
 | 第一期 | MVP-0~4（u2 → airtest 底层替换） | ✅ 全部完成，真机实测 |
 | 第二期 | FE-0~4（前端 Vue3 全栈重写） | ✅ 全部完成，真实浏览器验证 |
 
-**最终技术栈**：Tornado 后端 + airtest 设备层 + Vue 3 / Vite 8 / Pinia / Element Plus / Monaco 前端。默认 `/` 即新前端；`python -m weditor` 启动。
+**最终技术栈**：Tornado 后端 + airtest 设备层 + Vue 3 / Vite 8 / Pinia / Element Plus / Monaco 前端。默认 `/` 即新前端；`python -m server` 启动。
 
 **已知限制补齐（2026-11-18 同日完成 3/4）**：
 
@@ -482,13 +482,13 @@ class DeviceMeta(ABC):
 
 ### 12.2 新架构
 
-- **前端文件**：全部位于 `weditor/static/`
+- **前端文件**：全部位于 `server/static/`
   - `index.html` — `<script>` 标签按顺序引入本地 vendor 库 + `codegen.js` + `app.js`
   - `app.js` — Vue 3 全局构建（`vue.global.prod.js`），单文件合并原 `App.vue` 与 3 个 Pinia store 的逻辑；用 `setup()` + 模板字符串，无 SFC、无 store 库
   - `codegen.js` — UMD 格式（浏览器挂 `window.Codegen`，Node 可 `require`），平替原 `web/src/codegen.js`
   - `style.css` — 原 `App.vue` scoped 样式平移
   - `vendor/` — 从 npm 预构建产物复制并提交的本地库：`vue.global.prod.js`(169KB)、`element-plus/index.full.min.js`(1MB)+`index.css`、`monaco/vs/`(AMD + worker，约 14MB)。**无 CDN、无构建**
-- **后端**：`FrontendHandler` 改读 `weditor/static/index.html`；`/static/` 由 Tornado `static_path` 自动托管；所有 `/api/*`、`/ws/*` 路由不变
+- **后端**：`FrontendHandler` 改读 `server/static/index.html`；`/static/` 由 Tornado `static_path` 自动托管；所有 `/api/*`、`/ws/*` 路由不变
 - **删除**：整个 `web/` Vite 工程（`package.json`、`vite.config.js`、`src/*.vue`、`stores/*`、`node_modules`、旧 `web/tests/`）
 
 ### 12.3 功能与验收
@@ -499,34 +499,40 @@ class DeviceMeta(ABC):
 - HTTP：主页 + 11 个静态资源 + `/api/v1/version` 全部 200
 - 浏览器（playwright）：三栏布局渲染、Monaco 加载预加载代码、Vue/ElementPlus/Codegen 全局对象齐全、控制台 0 JS 错误（仅 favicon 404）
 - 真机闭环：`emulator-5554` 连接 → 截图 JPEG 渲染 → dump 出控件树 → 点节点生成 `touch((540, 960))`
-- 单元：`node --test weditor/static/codegen.test.js` 11 passed；Python 17 passed
+- 单元：`node --test server/static/codegen.test.js` 11 passed；Python 17 passed
 - **完全替换达成**：仓库无 `web/`、`package.json`、`node_modules`，运行时零 Node 依赖
 
 ### 12.4 维护提示
 
 vendor 是提交进仓库的预构建二进制，升级库版本需手动替换对应文件。Monaco 走 AMD `loader.js`，worker 路径由 `app.js` 的 `window.MonacoEnvironment.getWorkerUrl` 指向本地 `vendor/monaco/vs/base/worker/workerMain.js`。
 
-### 12.5 目录重构：weditor/web → server（2026-11-18）
+### 12.5 目录重构：weditor/web → server，并删除 weditor 包（2026-11-18）
 
-后端核心代码从 `weditor/web/` 迁出为**顶层包** `server/`，与 `weditor/` 同级：
+后端核心代码从 `weditor/web/` 迁出为顶层包 `server/`；随后把原 `weditor/` 包的入口（`__main__.py`）与前端静态资源（`static/`）一并并入 `server/`，`weditor/` 包被整体删除。最终结构：
 
 ```
 server/
+├── __init__.py
+├── __main__.py            # 程序入口（python -m server）
 ├── device.py  proto.py  uidumplib.py  utils.py  version.py
 ├── ipyshell-console.py
-└── handlers/
-    ├── page.py
-    └── shell.py
+├── handlers/
+│   ├── page.py
+│   └── shell.py
+└── static/                # 零构建前端（index.html + app.js + codegen.js + vendor/）
 ```
+
+启动方式：`python -m server`（原 `python -m weditor` 不再可用）。安装后的命令行命令仍叫 `weditor`（`setup.cfg` 的 console_scripts 指向 `server.__main__:main`）。
 
 配套改动：
 
 | 位置 | 改动 |
 | --- | --- |
-| `weditor/__main__.py` | 导入由 `from .web.* ` 改为 `from server.*` |
+| `server/__main__.py` | 改为包内相对导入 `from .handlers.page import ...` 等 |
 | `tests/*.py` | `from weditor.web import X` → `from server import X` |
-| `setup.cfg` | `[files] packages` 增加 `server`；顶层包必须声明，否则 `pip install` 后缺失 |
-| `server/handlers/page.py` | `FrontendHandler` 静态路径改为 `dirname(__file__)×3 + weditor/static/index.html`（前端产物仍在 `weditor` 包内） |
-| `server/handlers/shell.py` | `ROOT_DIR/../ipyshell-console.py` 无需改动（仍指向 `server/ipyshell-console.py`） |
+| `setup.cfg` | `[files] packages` 仅保留 `server`；入口改为 `weditor = server.__main__:main` |
+| `server/handlers/page.py` | `FrontendHandler` 静态路径改为 `dirname(__file__)×2 + static/index.html` |
+| `server/handlers/shell.py` | `ROOT_DIR/../ipyshell-console.py` 仍指向 `server/ipyshell-console.py`，无需改动 |
+| 文档 | `python -m weditor` → `python -m server`；`weditor/static/` → `server/static/` |
 
-注意：`server` 是通用顶层包名，若环境中已存在同名包可能冲突；`python -m weditor` 需项目根位于 `sys.path`（源码运行与 `pip install -e` 天然满足，普通安装由 `setup.cfg` 打包 `server` 保证）。
+注意：`server` 是通用顶层包名，若环境中已存在同名包可能冲突；`python -m server` 需项目根位于 `sys.path`（源码运行与 `pip install -e` 天然满足）。
