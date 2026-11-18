@@ -65,7 +65,7 @@ weditor --shortcut
 - CTRL+SHIFT+Enter: 运行选中代码或光标所在行代码
 
 ## 开发者文档
-See [DEVELOP.md](DEVELOP.md)
+See [DEVELOP.md](docs/DEVELOP.md)
 
 ## LICENSE
 [MIT](LICENSE)

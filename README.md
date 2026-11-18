@@ -67,7 +67,7 @@ To see more usage run `weditor -h`
 - Ctrl+Shift+Enter: Run selected code or current line if not selected
 
 ## For Developers
-See [DEVELOP.md](DEVELOP.md)
+See [DEVELOP.md](docs/DEVELOP.md)
 
 ## LICENSE
 [MIT](LICENSE)
