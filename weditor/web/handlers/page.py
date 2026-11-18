@@ -48,17 +48,17 @@ class VersionHandler(BaseHandler):
 
 
 class FrontendHandler(BaseHandler):
-    """Serve the Vue 3 build output (FE-0+). Kept at /new until FE-4 switches '/'."""
+    """Serve the zero-build Vue 3 single-page frontend (script-tag vendor libs)."""
 
     def get(self):
         # __file__ = weditor/web/handlers/page.py -> dirname x3 = weditor/
-        dist = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
-            os.path.abspath(__file__)))), "static", "dist", "index.html")
-        if not os.path.isfile(dist):
+        page = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__)))), "static", "index.html")
+        if not os.path.isfile(page):
             self.set_status(404)
-            self.write({"error": "frontend not built; run `npm run build` in web/"})
+            self.write({"error": "frontend index.html not found"})
             return
-        with open(dist, "r", encoding="utf-8") as f:
+        with open(page, "r", encoding="utf-8") as f:
             self.write(f.read())
 
 

@@ -1,0 +1,321 @@
+/* WEditor frontend - Vue 3 global build, no bundler.
+ * Replaces the former Vue3 SFC + Pinia app with a single script-tag driven file. */
+(function () {
+  'use strict'
+
+  const { createApp, ref, computed, onMounted, watch, nextTick } = Vue
+  const C = window.Codegen
+
+  // ---------- state (formerly Pinia stores) ----------
+  const device = {
+    platform: ref(localStorage.getItem('platform') || 'Android'),
+    serial: ref(localStorage.getItem('serial') || ''),
+    deviceId: ref(''),
+    connecting: ref(false),
+    loading: ref(false),
+    hierarchy: ref(null),
+  }
+  watch(device.platform, v => localStorage.setItem('platform', v))
+  watch(device.serial, v => localStorage.setItem('serial', v))
+
+  const shell = {
+    ws: null,
+    wsOpen: ref(false),
+    running: ref(false),
+    restarting: ref(false),
+    output: ref([]),
+    lastLineno: ref(null),
+  }
+
+  const editor = {
+    code: ref(''),
+    generatedCode: ref(''),
+    tapMode: ref(localStorage.getItem('tapMode') || 'coordinate'),
+  }
+  watch(editor.tapMode, v => localStorage.setItem('tapMode', v))
+
+  // ---------- app ----------
+  createApp({
+    setup() {
+      const version = ref('...')
+      const screenImg = ref(null)
+      const selectedNode = ref(null)
+      const hierarchyTree = ref([])
+      const codeContainer = ref(null)
+      let monacoEditor = null
+
+      const selectedInfo = computed(() => selectedNode.value || {})
+
+      async function fetchVersion() {
+        try {
+          const d = await fetch('/api/v1/version').then(r => r.json())
+          version.value = d.version || 'unknown'
+        } catch (e) { version.value = 'ERR' }
+      }
+
+      function shellConnect() {
+        if (shell.ws && shell.ws.readyState <= 1) return
+        const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
+        const ws = new WebSocket(`${proto}//${location.host}/ws/v1/python`)
+        shell.ws = ws
+        ws.onopen = () => { shell.wsOpen.value = true }
+        ws.onclose = () => { shell.wsOpen.value = false }
+        ws.onmessage = (ev) => {
+          try {
+            const msg = JSON.parse(ev.data)
+            if (msg.method === 'output') shell.output.value.push({ value: msg.value })
+            else if (msg.method === 'finish') shell.running.value = false
+            else if (msg.method === 'restarted') shell.restarting.value = false
+            else if (msg.method === 'gotoLine') shell.lastLineno.value = msg.value
+          } catch (e) { /* non-json frames */ }
+        }
+        return ws
+      }
+
+      function shellRun(code) {
+        if (!shell.ws || shell.ws.readyState !== 1) shellConnect()
+        shell.running.value = true
+        shell.output.value = []
+        shell.ws.send(JSON.stringify({ method: 'input', value: code }))
+      }
+
+      function shellInterrupt() {
+        if (shell.ws && shell.ws.readyState === 1)
+          shell.ws.send(JSON.stringify({ method: 'keyboardInterrupt' }))
+      }
+
+      function shellRestart() {
+        if (shell.ws && shell.ws.readyState === 1) {
+          shell.restarting.value = true
+          shell.ws.send(JSON.stringify({ method: 'restartKernel' }))
+        }
+      }
+
+      const ElMessage = window.ElementPlus.ElMessage
+
+      async function doConnect() {
+        try {
+          device.connecting.value = true
+          const body = new URLSearchParams({
+            platform: device.platform.value,
+            deviceUrl: device.serial.value,
+          })
+          const data = await fetch('/api/v1/connect', { method: 'POST', body }).then(r => r.json())
+          if (!data.success) throw new Error(data.description || 'connect failed')
+          device.deviceId.value = data.deviceId
+          ElMessage.success('Connected: ' + data.deviceId)
+          shellConnect()
+          shellRun(C.genPreloadCode(data.deviceId))
+          if (editor.code.value === '') setCode(C.genClearCode())
+        } catch (e) {
+          ElMessage.error('Connect failed: ' + e.message)
+        } finally {
+          device.connecting.value = false
+        }
+      }
+
+      async function dumpHierarchy() {
+        if (!device.deviceId.value) return ElMessage.warning('Connect first')
+        try {
+          device.loading.value = true
+          const id = encodeURIComponent(device.deviceId.value)
+          const v2 = await fetch(`/api/v2/devices/${id}/hierarchy`).then(r => r.json())
+          device.hierarchy.value = v2
+          hierarchyTree.value = v2.jsonHierarchy ? [v2.jsonHierarchy] : []
+          const shot = await fetch(`/api/v1/devices/${id}/screenshot`).then(r => r.json())
+          screenImg.value = 'data:image/jpeg;base64,' + shot.data
+          localStorage.setItem('screenshotBase64', shot.data)
+        } catch (e) {
+          ElMessage.error('Dump failed: ' + e.message)
+        } finally {
+          device.loading.value = false
+        }
+      }
+
+      function treeLabel(n) {
+        if (!n) return ''
+        return n.text || n.resourceId || n.description || n._type || n.name || '(node)'
+      }
+
+      function onNodeClick(data) {
+        if (!data.rect) return
+        selectedNode.value = data
+        editor.generatedCode.value = C.genSelectorDisplay(data, editor.tapMode.value)
+      }
+
+      async function doTap() {
+        if (!selectedNode.value) return
+        let code = editor.generatedCode.value || C.genTouchNode(selectedNode.value)
+        if (editor.tapMode.value === 'template' && selectedNode.value.rect) {
+          const r = selectedNode.value.rect
+          try {
+            const resp = await fetch('/api/v1/template', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                screenshot: localStorage.getItem('screenshotBase64') || '',
+                bounds: [r.x, r.y, r.x + r.width, r.y + r.height],
+              }),
+            }).then(r => r.json())
+            if (resp.success) code = C.genTemplateTap(resp.path)
+          } catch (e) { ElMessage.error('Template crop failed: ' + e.message) }
+        }
+        if (!code) return
+        setCode(code)
+        shellRun(code)
+      }
+
+      function setCode(code) {
+        editor.code.value = code
+        if (monacoEditor && monacoEditor.getValue() !== code) monacoEditor.setValue(code)
+      }
+
+      function editorCode() { return monacoEditor ? monacoEditor.getValue() : editor.code.value }
+
+      function runCode() { const c = editorCode(); if (c) shellRun(c) }
+      function runSelected() {
+        if (!monacoEditor) return runCode()
+        const sel = monacoEditor.getModel().getValueInRange(monacoEditor.getSelection())
+        shellRun(sel || monacoEditor.getValue())
+      }
+      function runCurrentLine() {
+        if (!monacoEditor) return runCode()
+        const line = monacoEditor.getPosition().lineNumber
+        shellRun(monacoEditor.getModel().getLineContent(line))
+      }
+
+      // ---------- Monaco (AMD) ----------
+      function initMonaco() {
+        return new Promise((resolve) => {
+          require.config({ paths: { vs: '/static/vendor/monaco/vs' } })
+          require(['vs/editor/editor.main'], function (monaco) {
+            monacoEditor = monaco.editor.create(codeContainer.value, {
+              value: editor.code.value || C.genClearCode(),
+              language: 'python',
+              theme: 'vs-dark',
+              automaticLayout: true,
+              minimap: { enabled: false },
+              quickSuggestions: { other: true, comments: false, strings: false },
+              suggestOnTriggerCharacters: true,
+            })
+            monacoEditor.onDidChangeModelContent(() => { editor.code.value = monacoEditor.getValue() })
+            monaco.languages.registerCompletionItemProvider('python', {
+              provideCompletionItems: (model, position) => {
+                const word = model.getWordUntilPosition(position)
+                const range = {
+                  startLineNumber: position.lineNumber,
+                  endLineNumber: position.lineNumber,
+                  startColumn: word.startColumn,
+                  endColumn: word.endColumn,
+                }
+                return {
+                  suggestions: C.ANDROID_COMPLETIONS.map(c => ({
+                    label: c.value.split('(')[0].replace(/[^a-zA-Z_]/g, '') || c.name,
+                    insertText: c.value,
+                    kind: monaco.languages.CompletionItemKind.Function,
+                    detail: 'airtest · ' + c.name,
+                    filterText: c.value,
+                    sortText: c.name,
+                    range,
+                  })),
+                }
+              },
+            })
+            resolve()
+          })
+        })
+      }
+
+      watch(shell.lastLineno, (n) => {
+        if (monacoEditor && n != null) {
+          monacoEditor.revealLineInCenter(n)
+          monacoEditor.setPosition({ lineNumber: n, column: 1 })
+        }
+      })
+
+      onMounted(async () => {
+        fetchVersion()
+        await nextTick()
+        await initMonaco()
+      })
+
+      return {
+        version, device, shell, editor, screenImg, selectedNode, selectedInfo,
+        hierarchyTree, codeContainer, treeLabel,
+        doConnect, dumpHierarchy, onNodeClick, doTap,
+        runCode, runSelected, runCurrentLine, shellInterrupt, shellRestart,
+        genClearCode: C.genClearCode,
+      }
+    },
+    template: `
+      <el-container class="layout">
+        <el-header class="header">
+          <span class="brand">WEditor <small>{{ version }}</small></span>
+          <el-select v-model="device.platform.value" size="small" style="width: 150px">
+            <el-option label="Android AirTest" value="Android" />
+            <el-option label="Android ADB" value="AndroidADB" />
+            <el-option label="iOS" value="iOS" />
+          </el-select>
+          <el-input v-model="device.serial.value" size="small" placeholder="device url" style="width: 200px" />
+          <el-button size="small" type="primary" :loading="device.connecting.value" @click="doConnect">Connect</el-button>
+          <el-button size="small" :loading="device.loading.value" @click="dumpHierarchy">Dump</el-button>
+          <span v-if="device.deviceId.value" class="devid">{{ device.deviceId.value }}</span>
+        </el-header>
+
+        <el-container class="main">
+          <el-aside width="42%" class="pane screen-pane">
+            <div class="panel-title">Screen</div>
+            <div class="screen-area">
+              <img v-if="screenImg" :src="screenImg" class="screen-img" />
+              <div v-else class="placeholder">No screenshot. Connect &amp; Dump.</div>
+            </div>
+          </el-aside>
+
+          <el-main class="pane attr-pane">
+            <div class="panel-title">
+              Selected Element
+              <el-button size="small" :disabled="!selectedNode" @click="doTap">Tap</el-button>
+            </div>
+            <el-descriptions :column="1" size="small" border v-if="selectedNode">
+              <el-descriptions-item label="class">{{ selectedInfo._type }}</el-descriptions-item>
+              <el-descriptions-item label="resource-id">{{ selectedInfo.resourceId }}</el-descriptions-item>
+              <el-descriptions-item label="text">{{ selectedInfo.text }}</el-descriptions-item>
+              <el-descriptions-item label="bounds">{{ JSON.stringify(selectedInfo.rect) }}</el-descriptions-item>
+            </el-descriptions>
+            <div v-else class="placeholder">Click a node in the hierarchy tree.</div>
+            <div class="code-hint">
+              <div>Generated code</div>
+              <el-input size="small" :model-value="editor.generatedCode.value" readonly />
+            </div>
+          </el-main>
+
+          <el-aside width="42%" class="pane code-pane">
+            <div class="panel-title">
+              Coding
+              <el-radio-group v-model="editor.tapMode.value" size="small">
+                <el-radio-button value="coordinate">坐标</el-radio-button>
+                <el-radio-button value="template">模板</el-radio-button>
+              </el-radio-group>
+              <el-button size="small" type="primary" @click="runCode">Run</el-button>
+              <el-button size="small" @click="runSelected">Sel</el-button>
+              <el-button size="small" @click="runCurrentLine">Line</el-button>
+              <el-button size="small" type="warning" :disabled="!shell.running.value" @click="shellInterrupt">Stop</el-button>
+              <el-button size="small" :loading="shell.restarting.value" @click="shellRestart">Restart</el-button>
+            </div>
+            <div ref="codeContainer" class="editor-container"></div>
+            <el-tabs class="bottom-tabs">
+              <el-tab-pane label="Hierarchy">
+                <el-tree :data="hierarchyTree" node-key="_id" default-expand-all
+                  :props="{ children: 'children', label: (d) => treeLabel(d) }"
+                  @node-click="onNodeClick" />
+              </el-tab-pane>
+              <el-tab-pane label="Console">
+                <pre class="console">{{ shell.output.value.map(o => o.value).join('') }}</pre>
+              </el-tab-pane>
+            </el-tabs>
+          </el-aside>
+        </el-container>
+      </el-container>
+    `,
+  }).use(window.ElementPlus).mount('#app')
+})()

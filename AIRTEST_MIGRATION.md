@@ -2,11 +2,11 @@
 
 | 项 | 内容 |
 | --- | --- |
-| 文档版本 | v1.8 / 2026-11-18（两期完成 + 4 项已知限制补齐 3 项） |
+| 文档版本 | v2.0 / 2026-11-18（第二期前端改为零构建 script 标签方案，D4 变更） |
 | 参考项目 | `d:/Projects/WebProjects/airtest-editor`（openatx/weditor 派生版） |
 | 改造目标 | ① 去除 `uiautomator2`，底层设备能力全面改由 `airtest` + airtest 的 adb 通道提供；② 前端由 Vue 2.5 + jQuery + Bootstrap + Element-UI + ACE + jstree 全栈重写为 Vue 3 + Vite + Pinia + Element Plus + Monaco |
 | 规划方法 | MVP：先打通最小可运行闭环，再逐层补齐编辑器体验；前端重写作为第二期独立立项 |
-| 已确认决策 | D1=A（ADB dump + 复用 XML 解析）; D2=A+B（坐标点击 + 图像模板，选择器 C 不纳入本期）; D3=新增 `AndroidAirTest`、deviceId 小写化、优先 airtest adb 通道、iOS 不纳入本期；**D4=前端走 L3 全栈重写（第 11 节）** |
+| 已确认决策 | D1=A（ADB dump + 复用 XML 解析）; D2=A+B（坐标点击 + 图像模板，选择器 C 不纳入本期）; D3=新增 `AndroidAirTest`、deviceId 小写化、优先 airtest adb 通道、iOS 不纳入本期；**D4=前端改为零构建 script 标签方案（见第 12 节，取代原 Vite 全栈重写）** |
 | 文档性质 | 分析与规划；本文不包含代码实现 |
 
 ---
@@ -471,3 +471,37 @@ class DeviceMeta(ABC):
 2. `grep` 确认无 jQuery / Bootstrap / jstree / ACE / Vue 2 / Element-UI 残留引用。
 3. 第 9 节 4 类测试（单元 / 接口 / 真机冒烟 / 完全替换检查）全部复用通过。
 4. 用户操作流程（连接→截图→dump→点树节点→生成 airtest 代码→REPL 执行）与第一期一致，无功能回退。
+
+---
+
+## 12. 架构调整：D4 改为零构建 script 标签方案（2026-11-18）
+
+### 12.1 变更原因
+
+原 D4 决策（第 11 节，FE-0~4）采用 Vite + Vue3 SFC + Pinia + Element Plus + Monaco 的全栈重写，依赖 `web/` 工程与 `node_modules`（约 200MB）在部署前执行 `npm run build`。用户明确要求运行时**不依赖 Node/npm**，前端以 `<script>` 标签直接引入 Vue3 的纯静态方式内嵌，克隆即用、断网可用。故推翻原 Vite 方案，改为零构建静态前端。
+
+### 12.2 新架构
+
+- **前端文件**：全部位于 `weditor/static/`
+  - `index.html` — `<script>` 标签按顺序引入本地 vendor 库 + `codegen.js` + `app.js`
+  - `app.js` — Vue 3 全局构建（`vue.global.prod.js`），单文件合并原 `App.vue` 与 3 个 Pinia store 的逻辑；用 `setup()` + 模板字符串，无 SFC、无 store 库
+  - `codegen.js` — UMD 格式（浏览器挂 `window.Codegen`，Node 可 `require`），平替原 `web/src/codegen.js`
+  - `style.css` — 原 `App.vue` scoped 样式平移
+  - `vendor/` — 从 npm 预构建产物复制并提交的本地库：`vue.global.prod.js`(169KB)、`element-plus/index.full.min.js`(1MB)+`index.css`、`monaco/vs/`(AMD + worker，约 14MB)。**无 CDN、无构建**
+- **后端**：`FrontendHandler` 改读 `weditor/static/index.html`；`/static/` 由 Tornado `static_path` 自动托管；所有 `/api/*`、`/ws/*` 路由不变
+- **删除**：整个 `web/` Vite 工程（`package.json`、`vite.config.js`、`src/*.vue`、`stores/*`、`node_modules`、旧 `web/tests/`）
+
+### 12.3 功能与验收
+
+功能与原 Vue3 版一致：连接 / 截图 / Dump / 控件树 / 选节点生成 `touch((x,y))` / 坐标+模板切换 / Run·Sel·Line·Stop·Restart / 补全（`window.Codegen.ANDROID_COMPLETIONS` 29 项）/ Console。
+
+实测验收（2026-11-18）：
+- HTTP：主页 + 11 个静态资源 + `/api/v1/version` 全部 200
+- 浏览器（playwright）：三栏布局渲染、Monaco 加载预加载代码、Vue/ElementPlus/Codegen 全局对象齐全、控制台 0 JS 错误（仅 favicon 404）
+- 真机闭环：`emulator-5554` 连接 → 截图 JPEG 渲染 → dump 出控件树 → 点节点生成 `touch((540, 960))`
+- 单元：`node --test weditor/static/codegen.test.js` 11 passed；Python 17 passed
+- **完全替换达成**：仓库无 `web/`、`package.json`、`node_modules`，运行时零 Node 依赖
+
+### 12.4 维护提示
+
+vendor 是提交进仓库的预构建二进制，升级库版本需手动替换对应文件。Monaco 走 AMD `loader.js`，worker 路径由 `app.js` 的 `window.MonacoEnvironment.getWorkerUrl` 指向本地 `vendor/monaco/vs/base/worker/workerMain.js`。

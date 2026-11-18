@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WEditor</title>
+  <link rel="stylesheet" href="/static/vendor/element-plus/index.css" />
+  <link rel="stylesheet" href="/static/style.css" />
+  <style>.el-message { pointer-events: none; }</style>
+</head>
+<body>
+  <div id="app"></div>
+
+  <!-- Local vendor libs: no CDN, no build step, works offline -->
+  <script src="/static/vendor/vue.global.prod.js"></script>
+  <script src="/static/vendor/element-plus/index.full.min.js"></script>
+  <script src="/static/codegen.js"></script>
+  <script>
+    // Monaco AMD loader (worker served from the same local vendor directory)
+    window.MonacoEnvironment = {
+      getWorkerUrl: function () { return '/static/vendor/monaco/vs/base/worker/workerMain.js' }
+    }
+  </script>
+  <script src="/static/vendor/monaco/vs/loader.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

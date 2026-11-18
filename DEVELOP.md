@@ -10,22 +10,32 @@ pip install -e weditor
 
 修改完后，直接运行`python -m weditor`调试
 
-## 前端开发（Vue 3 / Vite）
+## 前端（Vue 3，零构建）
 
-默认页面由 `web/` 下的 Vue 3 前端构建产物提供（`weditor/static/dist/`）。
+前端是纯静态文件，位于 `weditor/static/`，用 `<script>` 标签直接引入本地 vendor 库（Vue 3 / Element Plus / Monaco 的预构建版），**无需 Node、npm 或任何构建步骤**。克隆仓库后 `python -m weditor` 即可打开完整页面，断网可用。
 
-```bash
-cd web
-npm install --include=dev        # NODE_ENV=production 时需 --include=dev
-npm install-scripts approve esbuild   # npm 12 allowScripts 策略下需要
-npm run dev                      # 开发服务器 :5173，proxy /api /ws 到后端 :17310
-npm run build                    # 构建产物 -> ../weditor/static/dist/
-npm test                         # codegen 纯函数单元测试
+文件结构：
+
+```
+weditor/static/
+├── index.html                       # 主页面，script 标签引入下列资源
+├── app.js                           # Vue 3 全局构建应用（原 App.vue + Pinia stores 合并）
+├── codegen.js                       # airtest 代码生成（UMD：浏览器挂 window.Codegen，Node 可 require）
+├── codegen.test.js                  # codegen 单元测试（node --test）
+├── style.css                        # 页面样式
+└── vendor/                          # 本地预构建依赖（已提交，随仓库分发）
+    ├── vue.global.prod.js
+    ├── element-plus/index.full.min.js + index.css
+    └── monaco/vs/                   # AMD 版 + worker
 ```
 
-后端仍用 `python -m weditor`（默认端口 17310）。前端 build 产物由 Tornado 静态托管，`/` 即新前端；`/new` 是别名。
+后端 `python -m weditor`（默认端口 17310）通过 `FrontendHandler` 提供 `/`（`/new` 为别名），`/static/` 由 Tornado 静态托管。API 路由（`/api/v1/*`、`/api/v2/*`、`/ws/v1/python`）不变。
 
-> 环境变量 `NODE_ENV=production` 会让 npm 默认 `omit=dev`，导致 vite 未安装；务必用 `--include=dev`。
+运行 codegen 单测：
+
+```bash
+node --test weditor/static/codegen.test.js
+```
 
 ## 网页的基本布局（旧版 Vue2，仅供历史参考）
 ```
