@@ -98,3 +98,10 @@ debug.xml
 
 .DS_Store
 widgets/
+
+# Frontend dependencies
+node_modules/
+
+# Local IDE / verification artifacts
+.idea/
+.poc/

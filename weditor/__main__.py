@@ -38,9 +38,8 @@ from tornado.log import enable_pretty_logging
 from .web.handlers.page import (
     BaseHandler, DeviceConnectHandler,
     DeviceHierarchyHandler, DeviceHierarchyHandlerV2, DeviceScreenshotHandler,
-    DeviceTemplateHandler, DeviceWidgetListHandler, MainHandler,
+    DeviceTemplateHandler, DeviceWidgetListHandler, FrontendHandler,
     VersionHandler, WidgetPreviewHandler)
-from .web.handlers.proxy import StaticProxyHandler
 from .web.handlers.shell import PythonShellHandler
 from .web.utils import current_ip, tostr
 from .web.version import __version__
@@ -89,7 +88,9 @@ class CropHandler(BaseHandler):
 def make_app(settings={}):
     application = tornado.web.Application(
         [
-            (r"/", MainHandler),
+            (r"/", FrontendHandler),
+            (r"/new", FrontendHandler),
+            (r"/new/", FrontendHandler),
             (r"/api/v1/version", VersionHandler),
             (r"/api/v1/connect", DeviceConnectHandler),
             (r"/api/v1/crop", CropHandler),
@@ -110,9 +111,6 @@ def make_app(settings={}):
             (r"/widgets/(.+/.+)", tornado.web.StaticFileHandler, {
                 "path": "./widgets"
             }),
-            # cache static assets
-            (r"/(unpkg.com/.*)", StaticProxyHandler),
-            (r"/(cdn.jsdelivr.net/.*)", StaticProxyHandler),
             # (r"/ws/v1/build", BuildWSHandler),
             (r"/ws/v1/python", PythonShellHandler),
             (r"/quit", QuitHandler),

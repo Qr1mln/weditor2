@@ -47,9 +47,19 @@ class VersionHandler(BaseHandler):
         self.write(ret)
 
 
-class MainHandler(BaseHandler):
+class FrontendHandler(BaseHandler):
+    """Serve the Vue 3 build output (FE-0+). Kept at /new until FE-4 switches '/'."""
+
     def get(self):
-        self.render("index.html")
+        # __file__ = weditor/web/handlers/page.py -> dirname x3 = weditor/
+        dist = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__)))), "static", "dist", "index.html")
+        if not os.path.isfile(dist):
+            self.set_status(404)
+            self.write({"error": "frontend not built; run `npm run build` in web/"})
+            return
+        with open(dist, "r", encoding="utf-8") as f:
+            self.write(f.read())
 
 
 class DeviceConnectHandler(BaseHandler):

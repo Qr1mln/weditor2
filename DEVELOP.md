@@ -10,7 +10,24 @@ pip install -e weditor
 
 修改完后，直接运行`python -m weditor`调试
 
-## 网页的基本布局
+## 前端开发（Vue 3 / Vite）
+
+默认页面由 `web/` 下的 Vue 3 前端构建产物提供（`weditor/static/dist/`）。
+
+```bash
+cd web
+npm install --include=dev        # NODE_ENV=production 时需 --include=dev
+npm install-scripts approve esbuild   # npm 12 allowScripts 策略下需要
+npm run dev                      # 开发服务器 :5173，proxy /api /ws 到后端 :17310
+npm run build                    # 构建产物 -> ../weditor/static/dist/
+npm test                         # codegen 纯函数单元测试
+```
+
+后端仍用 `python -m weditor`（默认端口 17310）。前端 build 产物由 Tornado 静态托管，`/` 即新前端；`/new` 是别名。
+
+> 环境变量 `NODE_ENV=production` 会让 npm 默认 `omit=dev`，导致 vite 未安装；务必用 `--include=dev`。
+
+## 网页的基本布局（旧版 Vue2，仅供历史参考）
 ```
 ----------------------------
 NAV
@@ -57,10 +74,11 @@ See example: https://codepen.io/codeskyblue/pen/mYdjGb
 目前先打`git tag`, push到github之后，再通过travis发布到pypi上
 
 ## References
-- https://www.jstree.com/
-- fontawesome icons: https://fontawesome.com/v4.7.0/icons/
-- element-ui 组件：https://element.eleme.cn
-- bootstrap v3: https://v3.bootcss.com/
+- Vue 3: https://vuejs.org/
+- Vite: https://vite.dev/
+- Element Plus: https://element-plus.org/
+- Monaco Editor: https://microsoft.github.io/monaco-editor/
+- AirTest: https://airtest.doc.io.netease.com/
 
 # LocalStorage
 store keys:
