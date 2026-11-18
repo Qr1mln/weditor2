@@ -6,6 +6,7 @@ import numpy as np
 from PIL import Image
 
 from server import device as devmod
+from server.handlers import page as page_handlers
 from server.proto import PlatformEnum
 
 
@@ -17,7 +18,9 @@ class FakeAdb:
 
 class FakeDevice:
     def snapshot(self):
-        return np.zeros((1920, 1080, 3), dtype=np.uint8)
+        arr = np.zeros((1920, 1080, 3), dtype=np.uint8)
+        arr[0, 0] = [10, 20, 200]  # BGR: strong blue
+        return arr
 
     def get_top_activity(self):
         return ("com.example.app", ".MainActivity", "1234")
@@ -35,6 +38,24 @@ def test_screenshot_converts_ndarray_to_rgb_pil():
     assert isinstance(img, Image.Image)
     assert img.mode == "RGB"
     assert img.size == (1080, 1920)
+
+
+def test_screenshot_swaps_bgr_to_rgb_for_both_android_adapters():
+    for cls in (devmod._AndroidAirTestDevice, devmod._AndroidADB):
+        d = object.__new__(cls)
+        d._d = FakeDevice()
+        assert d.screenshot().getpixel((0, 0)) == (200, 20, 10)
+
+
+def test_screenshot_converts_bgra_snapshot_to_rgb():
+    class BGRADevice(FakeDevice):
+        def snapshot(self):
+            arr = np.zeros((1, 1, 4), dtype=np.uint8)
+            arr[0, 0] = [10, 20, 200, 255]
+            return arr
+
+    img = devmod._pil_from_airtest_snapshot(BGRADevice().snapshot())
+    assert img.getpixel((0, 0)) == (200, 20, 10)
 
 
 def test_dump_hierarchy_returns_xml():
@@ -88,3 +109,24 @@ def test_get_device_rebuilds_from_lowercase_prefix():
         devmod.cached_devices.clear()
         d = devmod.get_device("androidadb:serial-002")
         assert d.device is fake
+
+
+def test_build_screen_websocket_url():
+    class LegacyDevice:
+        address = 'http://127.0.0.1:7912/'
+
+    class AirtestDevice:
+        pass
+
+    assert page_handlers.build_screen_websocket_url(LegacyDevice()) == \
+        'ws://127.0.0.1:7912/minicap'
+    assert page_handlers.build_screen_websocket_url(AirtestDevice()) is None
+
+
+def test_build_minicap_websocket_url():
+    class Request:
+        protocol = 'http'
+        host = '127.0.0.1:17310'
+
+    assert page_handlers.build_minicap_websocket_url(Request(), 'androidadb:serial-01') == \
+        'ws://127.0.0.1:17310/ws/v1/minicap?deviceId=androidadb%3Aserial-01'

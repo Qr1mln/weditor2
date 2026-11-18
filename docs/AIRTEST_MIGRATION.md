@@ -23,7 +23,7 @@
 
 - iOS 统一迁移：iOS 分支当前走 `facebook-wda`，与 u2 无关，默认保留；如要求"全端 airtest"另立需求。
 - 更换 Tornado（如改 FastAPI）：仍为独立议题，本期与第二期前端重写均不改后端框架；前端重写后 Tornado 继续托管构建产物。
-- 实时投屏（minicap）恢复：独立议题。
+- 实时投屏（minicap）恢复：独立议题；悬浮工具栏已提供“截图 / minicap”切换，设备未返回 WebSocket 地址时自动使用截图。
 - 完整复刻 u2 的 watcher / implicitly_wait / screenrecord 等专有能力。
 
 ### 1.3 成功标准（可度量）
@@ -95,7 +95,7 @@ Tornado (weditor/__main__.py:88-116 路由表, 默认端口 17310; 第二期起�
 | u2 能力 | airtest 方案 | 可行性 | 阶段 |
 | --- | --- | --- | --- |
 | `u2.connect(serial)` | `airtest.core.api.connect_device("Android:///serial")` / `device()` | ✅ 原生 | MVP-1 |
-| `d.screenshot()` → PIL.Image | `snapshot()` 返回 numpy RGB；适配层用 `Image.fromarray()` 转 PIL | ✅ 需转换 | MVP-1 |
+| `d.screenshot()` → PIL.Image | `snapshot()` 返回 numpy BGR（cv2 约定）；适配层交换 R/B 通道后转 PIL | ✅ 需转换 | MVP-1 |
 | `d.dump_hierarchy()` | airtest `device.adb.shell("uiautomator dump ...")` 取 XML（**已确认**）；不走 Poco | ⚠️ 需适配 | MVP-1 |
 | XML → JSON 树 | 复用 `uidumplib.android_hierarchy_to_json()`，前提是属性名 `class/resource-id/content-desc/bounds` 保持 | ✅ 基本零改动 | MVP-1 |
 | `d.app_current()` | `device.get_top_activity()` / `adb shell dumpsys`（方法名待 POC 验证） | ⚠️ | MVP-1 |
@@ -164,7 +164,7 @@ class DeviceMeta(ABC):
 `_AndroidAirTestDevice` 实现要点：
 
 1. `connect_device("Android:///" + serial)`，缓存返回的 device 对象。
-2. `screenshot()`：`arr = dev.snapshot()` → `Image.fromarray(arr).convert("RGB")`，**保持 handler `:211` 不变**。
+2. `screenshot()`：`arr = dev.snapshot()` → `arr[:, :, ::-1]`（BGR→RGB）→ `Image.fromarray(arr).convert("RGB")`，**保持 handler `:211` 不变**。
 3. `dump_hierarchy()`：走 `dev.adb.shell("uiautomator dump /sdcard/window.xml ... cat ...")`，返回 XML 字符串；异常时返回空 hierarchy 而非崩溃。
 4. `dump_hierarchy2()`：维持现有返回键与类型（activity/package 用 airtest 等价方法或 adb 命令取）。
 5. 黑屏/登录页截图失败时提供空白图兜底，替代 u2 的 `fallback_to_blank_screenshot`。
@@ -301,7 +301,7 @@ class DeviceMeta(ABC):
 | 风险 | 影响 | 应对 |
 | --- | --- | --- |
 | `uiautomator dump` 属性名/格式与 u2 不同 | 控件树解析失败 | MVP-0 用真实 XML 验证；`uidumplib` 别名表做兼容映射 |
-| airtest `snapshot()` 返回 numpy 而非 PIL | 截图接口 500 | 适配层统一转 PIL，handler 不动 |
+| airtest `snapshot()` 返回 BGR numpy 而非 PIL | 截图接口 500 或截图偏蓝 | 适配层交换 R/B 通道后转 PIL，handler 不动 |
 | 中文输入不支持（`adb input text` 限制） | 输入框测试失败 | MVP-0 验证；必要时安装 ADBKeyboard / 改用剪贴板 IME |
 | 登录页/黑屏截图失败 | 截图空 | 适配层空白图兜底，替代 `fallback_to_blank_screenshot` |
 | WebView 内元素在 dump 中缺失 | 混页面控件不可选 | 明确标注限制；后续引入 Poco/WebView 方案 |

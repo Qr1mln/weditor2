@@ -52,6 +52,21 @@ def _blank_image():
     return Image.new("RGB", (1, 1), "white")
 
 
+def _pil_from_airtest_snapshot(snapshot) -> Image.Image:
+    """airtest Android snapshot() returns a cv2-style BGR array."""
+    if isinstance(snapshot, Image.Image):
+        return snapshot.convert("RGB")
+
+    if getattr(snapshot, "ndim", None) == 3 and snapshot.shape[2] >= 3:
+        if snapshot.shape[2] == 3:
+            snapshot = snapshot[:, :, ::-1]
+        elif snapshot.shape[2] == 4:
+            snapshot = snapshot[:, :, [2, 1, 0, 3]]
+        snapshot = snapshot.copy()
+
+    return Image.fromarray(snapshot).convert("RGB")
+
+
 class _AndroidAirTestDevice(DeviceMeta):
     """Android device backed by airtest (ADB channel), replacing uiautomator2."""
 
@@ -63,7 +78,7 @@ class _AndroidAirTestDevice(DeviceMeta):
     def screenshot(self) -> Image.Image:
         try:
             arr = self._d.snapshot()
-            return Image.fromarray(arr).convert("RGB")
+            return _pil_from_airtest_snapshot(arr)
         except Exception:
             logger.exception("snapshot failed, fallback to blank image")
             return _blank_image()
@@ -113,7 +128,7 @@ class _AndroidADB(DeviceMeta):
     def screenshot(self) -> Image.Image:
         try:
             arr = self._d.snapshot()
-            return Image.fromarray(arr).convert("RGB")
+            return _pil_from_airtest_snapshot(arr)
         except Exception:
             logger.exception("snapshot failed, fallback to blank image")
             return _blank_image()

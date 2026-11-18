@@ -7,6 +7,17 @@
   const C = window.Codegen
   const SPLIT_RATIO_KEY = 'weditor.splitRatio'
   const TOOLBAR_POS_KEY = 'weditor.toolbarPos'
+  const SCREEN_MODE_KEY = 'weditor.screenMode'
+
+  function loadScreenMode() {
+    return localStorage.getItem(SCREEN_MODE_KEY) === 'minicap' ? 'minicap' : 'screenshot'
+  }
+
+  function saveScreenMode(mode) {
+    try {
+      localStorage.setItem(SCREEN_MODE_KEY, mode)
+    } catch (e) {}
+  }
 
   function loadSplitRatio() {
     const saved = Number.parseFloat(localStorage.getItem(SPLIT_RATIO_KEY))
@@ -86,15 +97,25 @@
       const toolbarPos = ref(loadToolbarPosition())
       const toolbarDragging = ref(false)
       const screenshotLoading = ref(false)
+      const screenMode = ref(loadScreenMode())
+      const screenWebSocketUrl = ref(null)
+      const minicapConnecting = ref(false)
       const toolbarStyle = computed(() => ({
         transform: `translate3d(${toolbarPos.value.x}px, ${toolbarPos.value.y}px, 0)`,
       }))
+      const screenModeLabel = computed(() => screenMode.value === 'minicap' ? 'minicap' : '截图')
+      const screenModeTitle = computed(() => screenMode.value === 'minicap'
+        ? '当前：minicap 实时投屏，点击切换到截图'
+        : '当前：截图投屏，点击切换到 minicap')
       let monacoEditor = null
       let splitting = false
       let screenGesture = null
       let toolbarDrag = null
       let suppressToolbarClick = false
       let hasConnectedOnce = false
+      let screenWs = null
+      let minicapObjectUrl = null
+      let minicapRetryTimer = null
 
       const selectedInfo = computed(() => selectedNode.value || {})
 
@@ -464,10 +485,120 @@
 
       const ElMessage = window.ElementPlus.ElMessage
 
+      function closeMinicap() {
+        if (minicapRetryTimer) {
+          window.clearTimeout(minicapRetryTimer)
+          minicapRetryTimer = null
+        }
+        if (screenWs) {
+          const ws = screenWs
+          screenWs = null
+          ws.onopen = ws.onmessage = ws.onerror = ws.onclose = null
+          try { ws.close() } catch (e) {}
+        }
+        if (minicapObjectUrl) {
+          URL.revokeObjectURL(minicapObjectUrl)
+          minicapObjectUrl = null
+        }
+        minicapConnecting.value = false
+      }
+
+      function applyMinicapFrame(data) {
+        let blob = null
+        if (data instanceof Blob) {
+          blob = data
+        } else if (data instanceof ArrayBuffer) {
+          blob = new Blob([data], { type: 'image/jpeg' })
+        } else if (typeof data === 'string') {
+          try {
+            const msg = JSON.parse(data)
+            if (msg.data) {
+              const bytes = Uint8Array.from(atob(msg.data), c => c.charCodeAt(0))
+              blob = new Blob([bytes], { type: 'image/' + (msg.type || 'jpeg') })
+            }
+          } catch (e) {
+            return
+          }
+        }
+        if (!blob) return
+        const nextUrl = URL.createObjectURL(blob)
+        const prevUrl = minicapObjectUrl
+        minicapObjectUrl = nextUrl
+        screenImg.value = nextUrl
+        nextTick(() => {
+          fitScreen()
+          if (prevUrl) URL.revokeObjectURL(prevUrl)
+        })
+      }
+
+      function connectMinicap() {
+        closeMinicap()
+        if (!device.deviceId.value) return
+        if (!screenWebSocketUrl.value) {
+          ElMessage.warning('当前设备未提供 minicap WebSocket 地址')
+          return
+        }
+        let ws
+        try {
+          ws = new WebSocket(screenWebSocketUrl.value)
+        } catch (e) {
+          ElMessage.error('minicap 地址无效: ' + e.message)
+          return
+        }
+        ws.binaryType = 'blob'
+        screenWs = ws
+        minicapConnecting.value = true
+        ws.onopen = () => {
+          minicapConnecting.value = false
+          console.info('[minicap] connected', screenWebSocketUrl.value)
+        }
+        ws.onmessage = (ev) => applyMinicapFrame(ev.data)
+        ws.onerror = (ev) => console.error('[minicap] error', ev)
+        ws.onclose = () => {
+          if (screenWs !== ws) return
+          screenWs = null
+          minicapConnecting.value = false
+          if (screenMode.value !== 'minicap' || !device.deviceId.value) return
+          minicapRetryTimer = window.setTimeout(connectMinicap, 1500)
+        }
+      }
+
+      function setScreenMode(mode) {
+        if (screenMode.value === mode) return
+        screenMode.value = mode
+        saveScreenMode(mode)
+      }
+
+      async function toggleScreenMode() {
+        if (suppressToolbarClick) return
+        if (!device.deviceId.value) return ElMessage.warning('Connect first')
+        const next = screenMode.value === 'minicap' ? 'screenshot' : 'minicap'
+        if (next === 'minicap' && !screenWebSocketUrl.value) {
+          ElMessage.warning('当前设备不支持 minicap（连接响应未提供 WebSocket 地址）')
+          return
+        }
+        setScreenMode(next)
+        if (next === 'minicap') {
+          connectMinicap()
+        } else {
+          closeMinicap()
+          try {
+            await refreshScreenshot()
+          } catch (e) {
+            ElMessage.error('Screenshot failed: ' + e.message)
+          }
+        }
+      }
+
       async function refreshScreenshotFromToolbar() {
         if (suppressToolbarClick || screenshotLoading.value) return
         if (!device.deviceId.value) {
           ElMessage.warning('Connect first')
+          return
+        }
+        if (screenMode.value === 'minicap') {
+          connectMinicap()
+          ElMessage.success('minicap 重新连接中')
           return
         }
         screenshotLoading.value = true
@@ -493,6 +624,8 @@
           const isFirstConnection = !hasConnectedOnce
           hasConnectedOnce = true
           device.deviceId.value = data.deviceId
+          screenWebSocketUrl.value = data.screenWebSocketUrl || null
+          closeMinicap()
           screenImg.value = null
           deviceCoordinateSize.value = null
           screenshotSize.value = null
@@ -510,7 +643,17 @@
             }
           }
           try {
-            await refreshScreenshot()
+            if (screenMode.value === 'minicap') {
+              if (screenWebSocketUrl.value) {
+                connectMinicap()
+              } else {
+                setScreenMode('screenshot')
+                ElMessage.warning('当前设备不支持 minicap，已切换为截图投屏')
+                await refreshScreenshot()
+              }
+            } else {
+              await refreshScreenshot()
+            }
           } catch (e) {
             ElMessage.warning('Screenshot failed: ' + e.message)
           }
@@ -532,7 +675,7 @@
           device.hierarchy.value = v2
           deviceCoordinateSize.value = parseWindowSize(v2.windowSize)
           hierarchyTree.value = v2.jsonHierarchy ? [v2.jsonHierarchy] : []
-          await refreshScreenshot()
+          if (screenMode.value !== 'minicap') await refreshScreenshot()
         } catch (e) {
           ElMessage.error('Dump failed: ' + e.message)
         } finally {
@@ -664,6 +807,7 @@
       onBeforeUnmount(() => {
         stopSplitResize()
         stopToolbarDrag()
+        closeMinicap()
         removeGestureListeners()
         window.removeEventListener('resize', fitScreen)
         window.removeEventListener('resize', onToolbarWindowResize)
@@ -674,10 +818,11 @@
         hierarchyTree, codeContainer, treeLabel, screenAreaEl, screenImgEl,
         screenPaneWidth, splitterActive, frameStyle, rightTab,
         toolbarEl, toolbarStyle, toolbarDragging, screenshotLoading,
+        screenMode, screenModeLabel, screenModeTitle, screenWebSocketUrl, minicapConnecting,
         screenInfoText, displaySizeText, zoomPercent, cursorText,
         cursorPoint, coordTipStyle,
         doConnect, dumpHierarchy, onNodeClick, doTap, fitScreen, startSplitResize,
-        startToolbarDrag, refreshScreenshotFromToolbar,
+        startToolbarDrag, refreshScreenshotFromToolbar, toggleScreenMode,
         onScreenMouseDown, onScreenMouseMove, onScreenMouseLeave,
         runCode, runSelected, runCurrentLine, shellInterrupt, shellRestart,
         genClearCode: C.genClearCode,
@@ -685,8 +830,23 @@
     },
     template: `
       <el-container class="layout">
-        <el-header class="header">
+        <el-header class="header menu-bar">
           <span class="brand">WEditor <small>{{ version }}</small></span>
+          <div class="menu-groups">
+            <div class="menu-switch" :title="screenModeTitle">
+              <span class="menu-label">投屏</span>
+              <el-switch
+                :model-value="screenMode === 'minicap'"
+                :disabled="minicapConnecting"
+                active-text="minicap"
+                inactive-text="截图"
+                @change="toggleScreenMode"
+              />
+            </div>
+
+            <el-button size="small" type="primary" :loading="device.connecting.value" @click="doConnect">Connect</el-button>
+            <el-button size="small" :loading="device.loading.value" @click="dumpHierarchy">Dump</el-button>
+          </div>
         </el-header>
 
         <el-container class="main">
@@ -698,13 +858,12 @@
                 <el-option label="iOS" value="iOS" />
               </el-select>
               <el-input v-model="device.serial.value" size="small" placeholder="device url" style="width: 150px" />
-              <el-button size="small" type="primary" :loading="device.connecting.value" @click="doConnect">Connect</el-button>
-              <el-button size="small" :loading="device.loading.value" @click="dumpHierarchy">Dump</el-button>
               <span v-if="device.deviceId.value" class="devid">{{ device.deviceId.value }}</span>
             </div>
             <div class="panel-title">
               Screen
               <div class="screen-meta">
+                <span>投屏：{{ screenModeLabel }}</span>
                 <span>屏幕信息：{{ screenInfoText }}</span>
                 <span>大小：{{ displaySizeText }}</span>
                 <span>当前缩放：{{ zoomPercent }}%</span>
