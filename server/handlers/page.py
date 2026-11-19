@@ -195,6 +195,7 @@ class DeviceTemplateHandler(BaseHandler):
     """Crop a control region from a screenshot and save it as an airtest Template image."""
 
     STORE_DIR = os.path.expanduser("~/.weditor/templates")
+    IMAGE_EXTS = ('.png', '.jpg', '.jpeg', '.bmp', '.webp')
 
     def post(self):
         try:
@@ -222,6 +223,58 @@ class DeviceTemplateHandler(BaseHandler):
             })
         except Exception as e:
             logger.exception("create template failed")
+            self.set_status(500)
+            self.write({"success": False, "description": str(e)})
+
+
+class DeviceTemplateListHandler(BaseHandler):
+    """List / delete saved template images shown in the resource manager."""
+
+    STORE_DIR = os.path.expanduser("~/.weditor/templates")
+
+    def _safe_path(self, name):
+        name = os.path.basename(str(name or ''))
+        store = os.path.abspath(self.STORE_DIR)
+        path = os.path.abspath(os.path.join(store, name))
+        if not name or os.path.commonpath([store, path]) != store:
+            raise ValueError('invalid filename')
+        return path
+
+    def get(self):
+        try:
+            os.makedirs(self.STORE_DIR, exist_ok=True)
+            items = []
+            for name in os.listdir(self.STORE_DIR):
+                if not name.lower().endswith(DeviceTemplateHandler.IMAGE_EXTS):
+                    continue
+                path = os.path.join(self.STORE_DIR, name)
+                if not os.path.isfile(path):
+                    continue
+                stat = os.stat(path)
+                items.append({
+                    "filename": name,
+                    "path": os.path.abspath(path).replace("\\", "/"),
+                    "url": "/widgets/templates/" + quote(name, safe=''),
+                    "size": stat.st_size,
+                    "created": int(stat.st_mtime * 1000),
+                })
+            items.sort(key=lambda item: item["created"], reverse=True)
+            self.write({"success": True, "items": items})
+        except Exception as e:
+            logger.exception("list templates failed")
+            self.set_status(500)
+            self.write({"success": False, "description": str(e)})
+
+    def delete(self):
+        try:
+            data = json_decode(self.request.body)
+            path = self._safe_path(data.get('filename'))
+            if not os.path.isfile(path):
+                raise FileNotFoundError('template not found')
+            os.remove(path)
+            self.write({"success": True})
+        except Exception as e:
+            logger.exception("delete template failed")
             self.set_status(500)
             self.write({"success": False, "description": str(e)})
 

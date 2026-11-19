@@ -95,6 +95,8 @@
       const templateRect = ref(null)
       const rightTab = ref('coding')
       const codingMode = ref(false) // false=操作, true=编程
+      const templateAssets = ref([])
+      const templateAssetsLoading = ref(false)
       const MODE_LABELS = { operate: '操作', program: '编程', template: '模板' }
       function modeFrom(coding, tap) {
         return !coding ? 'operate' : (tap === 'template' ? 'template' : 'program')
@@ -795,7 +797,10 @@
                 bounds: [r.x, r.y, r.x + r.width, r.y + r.height],
               }),
             }).then(r => r.json())
-            if (resp.success) code = C.genTemplateTap(resp.path)
+            if (resp.success) {
+              code = C.genTemplateTap(resp.path)
+              loadTemplateAssets()
+            }
           } catch (e) { ElMessage.error('Template crop failed: ' + e.message) }
         }
         if (!code) return
@@ -806,6 +811,39 @@
       function setCode(code) {
         editor.code.value = code
         if (monacoEditor && monacoEditor.getValue() !== code) monacoEditor.setValue(code)
+      }
+
+      async function loadTemplateAssets() {
+        templateAssetsLoading.value = true
+        try {
+          const data = await fetch('/api/v1/templates').then(r => r.json())
+          if (!data.success) throw new Error(data.description || 'load failed')
+          templateAssets.value = data.items || []
+        } catch (e) {
+          ElMessage.error('资源加载失败: ' + e.message)
+        } finally {
+          templateAssetsLoading.value = false
+        }
+      }
+
+      async function deleteTemplateAsset(item) {
+        try {
+          const data = await fetch('/api/v1/templates', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename: item.filename }),
+          }).then(r => r.json())
+          if (!data.success) throw new Error(data.description || 'delete failed')
+          ElMessage.success('已删除 ' + item.filename)
+          await loadTemplateAssets()
+        } catch (e) {
+          ElMessage.error('删除失败: ' + e.message)
+        }
+      }
+
+      function useTemplateAsset(item) {
+        setCode(C.genTemplateTap(item.path))
+        ElMessage.success('已插入模板代码')
       }
 
       function editorCode() { return monacoEditor ? monacoEditor.getValue() : editor.code.value }
@@ -871,8 +909,9 @@
         }
       })
 
-      watch(rightTab, () => {
+      watch(rightTab, (tab) => {
         nextTick(() => { if (monacoEditor) monacoEditor.layout() })
+        if (tab === 'assets') loadTemplateAssets()
       })
 
       onMounted(async () => {
@@ -904,11 +943,13 @@
         version, device, shell, editor, screenImg, selectedNode, selectedInfo,
         hierarchyTree, codeContainer, treeLabel, screenAreaEl, screenImgEl,
         screenPaneWidth, splitterActive, frameStyle, rightTab, codingMode, activeMode, templateRect,
+        templateAssets, templateAssetsLoading,
         toolbarEl, toolbarStyle, toolbarDragging, screenshotLoading,
         screenMode, screenModeLabel, screenModeTitle, screenWebSocketUrl, minicapConnecting,
         screenInfoText, displaySizeText, zoomPercent, cursorText,
         cursorPoint, coordTipStyle,
         doConnect, dumpHierarchy, onNodeClick, doTap, fitScreen, startSplitResize,
+        loadTemplateAssets, deleteTemplateAsset, useTemplateAsset,
         startToolbarDrag, refreshScreenshotFromToolbar, toggleScreenMode,
         onScreenMouseDown, onScreenMouseMove, onScreenMouseLeave,
         runCode, runSelected, runCurrentLine, shellInterrupt, shellRestart,
@@ -1036,6 +1077,23 @@
                       <el-input size="small" :model-value="editor.generatedCode.value" readonly />
                     </div>
                   </div>
+                </el-tab-pane>
+                <el-tab-pane label="Assets" name="assets">
+                  <div class="panel-title resource-toolbar">
+                    模板图片
+                    <el-button size="small" :loading="templateAssetsLoading" @click="loadTemplateAssets">刷新</el-button>
+                  </div>
+                  <div v-if="templateAssets.length" class="asset-grid">
+                    <div v-for="item in templateAssets" :key="item.filename" class="asset-card">
+                      <div class="asset-thumb" @click="useTemplateAsset(item)" :title="'插入模板代码：' + item.filename">
+                        <img :src="item.url" :alt="item.filename" />
+                      </div>
+                      <div class="asset-name" :title="item.filename">{{ item.filename }}</div>
+                      <div class="asset-meta">{{ (item.size / 1024).toFixed(1) }} KB</div>
+                      <el-button class="asset-delete" size="small" type="danger" plain @click="deleteTemplateAsset(item)">删除</el-button>
+                    </div>
+                  </div>
+                  <div v-else class="placeholder">暂无模板图片。在 Hierarchy 中选中节点，切到模板模式后点击 Tap，生成的图片会保存在这里。</div>
                 </el-tab-pane>
               </el-tabs>
               <div class="console-panel">
