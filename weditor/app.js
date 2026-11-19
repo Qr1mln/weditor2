@@ -6,6 +6,7 @@
   const { createApp, ref, computed, onMounted, onBeforeUnmount, watch, nextTick } = Vue
   const C = window.Codegen
   const SPLIT_RATIO_KEY = 'weditor.splitRatio'
+  const CONSOLE_HEIGHT_KEY = 'weditor.consoleHeight'
   const TOOLBAR_POS_KEY = 'weditor.toolbarPos'
   const SCREEN_MODE_KEY = 'weditor.screenMode'
   const ACTIONS_COLLAPSED_KEY = 'weditor.actionsCollapsed'
@@ -83,6 +84,11 @@
     return Number.isFinite(saved) && saved >= 5 && saved <= 95 ? saved : 50
   }
 
+  function loadConsoleHeight() {
+    const saved = Number.parseFloat(localStorage.getItem(CONSOLE_HEIGHT_KEY))
+    return Number.isFinite(saved) && saved >= 80 && saved <= 2000 ? saved : 180
+  }
+
   function loadToolbarPosition() {
     try {
       const saved = JSON.parse(localStorage.getItem(TOOLBAR_POS_KEY) || 'null')
@@ -144,6 +150,8 @@
       const screenImgEl = ref(null)
       const screenPaneWidth = ref(loadSplitRatio() + '%')
       const splitterActive = ref(false)
+      const consoleHeight = ref(loadConsoleHeight() + 'px')
+      const consoleSplitterActive = ref(false)
       const deviceCoordinateSize = ref(null)
       const screenshotSize = ref(null)
       const displaySize = ref(null)
@@ -210,6 +218,7 @@
         : '当前：截图投屏，点击切换到 minicap')
       let monacoEditor = null
       let splitting = false
+      let consoleResizing = false
       let screenGesture = null
       let lastProgramTap = null
       let lastTemplateTap = null
@@ -635,6 +644,57 @@
         document.body.style.userSelect = 'none'
         document.addEventListener('mousemove', resizeSplitter)
         document.addEventListener('mouseup', stopSplitResize)
+      }
+
+      function getWorkspaceElement() {
+        return document.querySelector('.code-workspace')
+      }
+
+      function clampConsoleHeight(height, rect) {
+        const minHeight = 80
+        const minTop = 160
+        const splitterHeight = 8
+        const maxHeight = Math.max(minHeight, rect.height - minTop - splitterHeight)
+        return Math.min(Math.max(height, minHeight), maxHeight)
+      }
+
+      function onWorkspaceResize() {
+        const workspace = getWorkspaceElement()
+        if (!workspace) return
+        const rect = workspace.getBoundingClientRect()
+        if (!rect.height) return
+        consoleHeight.value = clampConsoleHeight(loadConsoleHeight(), rect) + 'px'
+      }
+
+      function resizeConsoleSplitter(e) {
+        const workspace = getWorkspaceElement()
+        if (!workspace) return
+        const rect = workspace.getBoundingClientRect()
+        if (!rect.height) return
+        const height = clampConsoleHeight(rect.bottom - e.clientY, rect)
+        const rounded = Math.round(height)
+        consoleHeight.value = rounded + 'px'
+        localStorage.setItem(CONSOLE_HEIGHT_KEY, String(rounded))
+        nextTick(() => { if (monacoEditor) monacoEditor.layout() })
+      }
+
+      function stopConsoleResize() {
+        if (!consoleResizing) return
+        consoleResizing = false
+        consoleSplitterActive.value = false
+        document.body.style.userSelect = ''
+        document.removeEventListener('mousemove', resizeConsoleSplitter)
+        document.removeEventListener('mouseup', stopConsoleResize)
+      }
+
+      function startConsoleResize(e) {
+        if (consoleResizing || (e.button != null && e.button !== 0)) return
+        e.preventDefault()
+        consoleResizing = true
+        consoleSplitterActive.value = true
+        document.body.style.userSelect = 'none'
+        document.addEventListener('mousemove', resizeConsoleSplitter)
+        document.addEventListener('mouseup', stopConsoleResize)
       }
 
       function clampToolbarPosition(x, y) {
@@ -1404,8 +1464,10 @@
           const rect = main.getBoundingClientRect()
           if (rect.width) screenPaneWidth.value = clampSplitRatio(loadSplitRatio(), rect).toFixed(2) + '%'
         }
+        onWorkspaceResize()
         await initMonaco()
         window.addEventListener('resize', fitScreen)
+        window.addEventListener('resize', onWorkspaceResize)
         window.addEventListener('resize', onToolbarWindowResize)
         if (window.ResizeObserver && screenAreaEl.value) {
           new ResizeObserver(fitScreen).observe(screenAreaEl.value)
@@ -1419,18 +1481,21 @@
       })
       onBeforeUnmount(() => {
         stopSplitResize()
+        stopConsoleResize()
         stopToolbarDrag()
         closeMinicap()
         removeGestureListeners()
         if (workspaceObserver) workspaceObserver.disconnect()
         window.removeEventListener('resize', fitScreen)
+        window.removeEventListener('resize', onWorkspaceResize)
         window.removeEventListener('resize', onToolbarWindowResize)
       })
 
       return {
         version, device, shell, editor, screenImg, selectedNode, selectedInfo,
         hierarchyTree, codeContainer, treeLabel, screenAreaEl, screenImgEl,
-        screenPaneWidth, splitterActive, frameStyle, rightTab, codingMode, activeMode, templateRect,
+        screenPaneWidth, splitterActive, consoleHeight, consoleSplitterActive,
+        frameStyle, rightTab, codingMode, activeMode, templateRect,
         codeWorkspaceEl, actionsCollapsed, actionsCompact, activeSnippet,
         pendingCoordHint, coordHintText, pendingTemplateFill, templateHintText,
         codingActions: CODING_ACTIONS,
@@ -1439,7 +1504,7 @@
         screenMode, screenModeLabel, screenModeTitle, screenWebSocketUrl, minicapConnecting,
         screenInfoText, displaySizeText, zoomPercent, cursorText,
         cursorPoint, coordTipStyle,
-        doConnect, dumpHierarchy, onNodeClick, doTap, fitScreen, startSplitResize,
+        doConnect, dumpHierarchy, onNodeClick, doTap, fitScreen, startSplitResize, startConsoleResize,
         loadTemplateAssets, deleteTemplateAsset, useTemplateAsset,
         startToolbarDrag, refreshScreenshotFromToolbar, toggleScreenMode,
         onScreenMouseDown, onScreenMouseMove, onScreenMouseLeave,
@@ -1649,7 +1714,13 @@
                   <div v-else class="placeholder">暂无模板图片。在 Hierarchy 中选中节点，切到模板模式后点击 Tap，生成的图片会保存在这里。</div>
                 </el-tab-pane>
               </el-tabs>
-              <div class="console-panel">
+              <div
+                class="splitter splitter-horizontal"
+                :class="{ active: consoleSplitterActive }"
+                title="Drag to resize console"
+                @mousedown="startConsoleResize"
+              ></div>
+              <div class="console-panel" :style="{ height: consoleHeight }">
                 <div class="panel-title">Console</div>
                 <pre class="console">{{ shell.output.value.map(o => o.value).join('') }}</pre>
               </div>

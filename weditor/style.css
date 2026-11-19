@@ -137,6 +137,15 @@ html, body, body *, body *::before, body *::after {
   border-right: 1px solid #ddd;
 }
 .splitter:hover, .splitter.active { background: #cfe8ff; }
+.splitter-horizontal {
+  flex: 0 0 8px;
+  width: auto;
+  height: 8px;
+  border-left: none;
+  border-right: none;
+  border-top: 1px solid #ddd;
+  border-bottom: 1px solid #ddd;
+}
 .code-workspace { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .right-tabs { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .right-tabs .el-tabs__content { flex: 1; min-height: 0; }
