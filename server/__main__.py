@@ -40,6 +40,8 @@ from .handlers.page import (
     DeviceGestureHandler, DeviceHierarchyHandler, DeviceHierarchyHandlerV2,
     DeviceScreenshotHandler, DeviceTemplateHandler, DeviceTemplateListHandler,
     FrontendHandler, MinicapWebSocketHandler, VersionHandler)
+from .handlers.files import (
+    ProjectHandler, WorkspaceContentHandler, WorkspaceFilesHandler)
 from .handlers.shell import PythonShellHandler
 from .utils import current_ip, tostr
 from .version import __version__
@@ -96,6 +98,9 @@ def make_app(settings={}):
             (r"/api/v1/crop", CropHandler),
             (r"/api/v1/template", DeviceTemplateHandler),
             (r"/api/v1/templates", DeviceTemplateListHandler),
+            (r"/api/v1/files", WorkspaceFilesHandler),
+            (r"/api/v1/files/content", WorkspaceContentHandler),
+            (r"/api/v1/project", ProjectHandler),
             (r"/api/v1/devices/([^/]+)/screenshot", DeviceScreenshotHandler),
             (r"/api/v1/devices/([^/]+)/gesture", DeviceGestureHandler),
             (r"/api/v1/devices/([^/]+)/hierarchy", DeviceHierarchyHandler),
