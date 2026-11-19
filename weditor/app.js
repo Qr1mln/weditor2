@@ -119,6 +119,9 @@
       let monacoEditor = null
       let splitting = false
       let screenGesture = null
+      let lastProgramTap = null
+      const DOUBLE_TAP_MS = 400
+      const DOUBLE_TAP_DISTANCE = 8
       let toolbarDrag = null
       let suppressToolbarClick = false
       let hasConnectedOnce = false
@@ -239,6 +242,7 @@
       watch(activeMode, (next, prev) => {
         logInteraction('模式切换', `${MODE_LABELS[prev]} → ${MODE_LABELS[next]}`, { mode: next })
         screenGesture = null
+        lastProgramTap = null
         removeGestureListeners()
         clearCursor()
         templateRect.value = null
@@ -318,10 +322,21 @@
             })
             return
           }
+          const now = Date.now()
+          const isDoubleTap = lastProgramTap
+            && now - lastProgramTap.time <= DOUBLE_TAP_MS
+            && Math.hypot(e.clientX - lastProgramTap.x, e.clientY - lastProgramTap.y) <= DOUBLE_TAP_DISTANCE
+          if (!isDoubleTap) {
+            lastProgramTap = { time: now, x: e.clientX, y: e.clientY }
+            logInteraction('编程模式', '等待双击（第二次点击后插入代码）', { x: start.x, y: start.y })
+            return
+          }
+          lastProgramTap = null
           logInteraction('编程模式', '获取坐标', { x: start.x, y: start.y })
-          const text = `(${start.x}, ${start.y})`
-          logInteraction('编程模式', '插入坐标到 Coding 当前位置（占位，未实际写入）', {
-            text,
+          const code = C.genTouch(start.x, start.y)
+          const inserted = insertAtCursor(code)
+          logInteraction('编程模式', '双击插入坐标代码到 Coding 当前位置', {
+            code, inserted,
             cursor: monacoEditor ? monacoEditor.getPosition() : null,
           })
           return
@@ -811,6 +826,20 @@
       function setCode(code) {
         editor.code.value = code
         if (monacoEditor && monacoEditor.getValue() !== code) monacoEditor.setValue(code)
+      }
+
+      function insertAtCursor(text) {
+        if (!monacoEditor) {
+          editor.code.value += text
+          return false
+        }
+        monacoEditor.executeEdits('weditor-screen-touch', [{
+          range: monacoEditor.getSelection(),
+          text,
+          forceMoveMarkers: true,
+        }])
+        monacoEditor.focus()
+        return true
       }
 
       async function loadTemplateAssets() {
