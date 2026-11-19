@@ -8,6 +8,65 @@
   const SPLIT_RATIO_KEY = 'weditor.splitRatio'
   const TOOLBAR_POS_KEY = 'weditor.toolbarPos'
   const SCREEN_MODE_KEY = 'weditor.screenMode'
+  const ACTIONS_COLLAPSED_KEY = 'weditor.actionsCollapsed'
+  const ACTION_GROUP_LABELS = { action: '交互操作', assert: '等待与断言', utility: '辅助工具' }
+
+  const CODING_ACTIONS = [
+    {
+      id: 'touch', label: 'touch', name: '坐标点击', group: 'action',
+      description: '在指定坐标执行一次点击；双击左侧屏幕可插入真实坐标。',
+      code: 'touch((x, y))',
+      icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11V5.5a1.5 1.5 0 0 1 3 0V10"/><path d="M12 10V4.5a1.5 1.5 0 0 1 3 0V10"/><path d="M15 10V6a1.5 1.5 0 0 1 3 0v8c0 4.2-2.6 7-6.5 7S6 18.4 6 14v-3a1.5 1.5 0 0 1 3 0v2"/></svg>',
+    },
+    {
+      id: 'wait', label: 'wait', name: '等待图像', group: 'assert',
+      description: '等待图像模板出现，超时时间为 10 秒。',
+      code: 'wait(Template("tpl.png"), timeout=10)',
+      icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2.5h5"/><path d="M12 2.5v2"/><circle cx="12" cy="13" r="8"/><path d="M12 9v4.2l2.8 1.8"/></svg>',
+    },
+    {
+      id: 'swipe', label: 'swipe', name: '滑动', group: 'action',
+      description: '从起点滑动到终点，duration 为持续时间（秒）。',
+      code: 'swipe((x1, y1), (x2, y2), duration=0.5)',
+      icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 21v-8a2 2 0 0 1 4 0v8"/><path d="M9.5 13V6.5a2 2 0 0 1 4 0V13"/><path d="M5.5 10V4.5"/><path d="m3.5 6.5 2-2 2 2"/><path d="M16 13V8"/><path d="m14 10 2-2 2 2"/></svg>',
+    },
+    {
+      id: 'exists', label: 'exists', name: '图像存在', group: 'assert',
+      description: '判断图像模板是否出现在当前屏幕，返回布尔值。',
+      code: 'exists(Template("tpl.png"))',
+      icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/><path d="m7.5 10.5 2 2 4-4"/></svg>',
+    },
+    {
+      id: 'text', label: 'text', name: '输入文本', group: 'action',
+      description: '向当前焦点输入英文文本；中文请改用 input_text。',
+      code: 'text("hello")',
+      icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="M6.5 9.5h7M10 9.5V16M15 9.5h3.5M16.75 9.5V16M15 16h3.5"/></svg>',
+    },
+    {
+      id: 'keyevent', label: 'keyevent', name: '系统按键', group: 'action',
+      description: '发送系统按键，例如 HOME、BACK、POWER。',
+      code: 'keyevent("HOME")',
+      icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6.5 10h.01M10 10h.01M13.5 10h.01M17 10h.01M6.5 13.5h.01M17 13.5h.01M10 13.5h4"/></svg>',
+    },
+    {
+      id: 'snapshot', label: 'snapshot', name: '保存截图', group: 'utility',
+      description: '保存当前设备屏幕到文件，便于后续 Template 匹配。',
+      code: 'snapshot("screen.png")',
+      icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5A2.5 2.5 0 0 1 6 6h2l1.5-2.5h5L16 6h2a2.5 2.5 0 0 1 2.5 2.5v9A2.5 2.5 0 0 1 18 20H6a2.5 2.5 0 0 1-2.5-2.5z"/><circle cx="12" cy="13" r="3.5"/></svg>',
+    },
+    {
+      id: 'sleep', label: 'sleep', name: '休眠等待', group: 'assert',
+      description: '暂停脚本执行指定的秒数。',
+      code: 'sleep(1)',
+      icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11z"/></svg>',
+    },
+    {
+      id: 'log', label: 'log', name: '打印日志', group: 'utility',
+      description: '向控制台输出一条日志；Run 后内容显示在下方 Console。',
+      code: 'log("message")',
+      icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9a1.5 1.5 0 0 1-1.5 1.5H9l-5 4v-4H5.5A1.5 1.5 0 0 1 4 14.5z"/><path d="M8 9h8M8 12h5"/></svg>',
+    },
+  ]
 
   function loadScreenMode() {
     return localStorage.getItem(SCREEN_MODE_KEY) === 'minicap' ? 'minicap' : 'screenshot'
@@ -95,6 +154,39 @@
       const templateRect = ref(null)
       const rightTab = ref('coding')
       const codingMode = ref(false) // false=操作, true=编程
+      const codeWorkspaceEl = ref(null)
+      const workspaceWidth = ref(0)
+      const actionsCollapsed = ref(localStorage.getItem(ACTIONS_COLLAPSED_KEY) === '1')
+      const actionsCompact = computed(() => actionsCollapsed.value
+        || (workspaceWidth.value > 0 && workspaceWidth.value < 560))
+      const activeSnippet = ref('')
+      const pendingCoordHint = ref(false)
+      const coordHintText = ref('')
+      const pendingTemplateFill = ref(false)
+      const templateHintText = ref('')
+      let coordFillRange = null
+      let coordFillPlan = null
+      let coordFillEditing = false
+      let templateFillRange = null
+      let templateBounds = null
+      let workspaceObserver = null
+      function clearCoordFill() {
+        coordFillRange = null
+        coordFillPlan = null
+        pendingCoordHint.value = false
+        coordHintText.value = ''
+      }
+      function clearTemplateFill() {
+        templateFillRange = null
+        templateBounds = null
+        lastTemplateTap = null
+        pendingTemplateFill.value = false
+        templateHintText.value = ''
+      }
+      watch(actionsCollapsed, (v) => {
+        try { localStorage.setItem(ACTIONS_COLLAPSED_KEY, v ? '1' : '0') } catch (e) {}
+        nextTick(() => { if (monacoEditor) monacoEditor.layout() })
+      })
       const templateAssets = ref([])
       const templateAssetsLoading = ref(false)
       const MODE_LABELS = { operate: '操作', program: '编程', template: '模板' }
@@ -120,6 +212,7 @@
       let splitting = false
       let screenGesture = null
       let lastProgramTap = null
+      let lastTemplateTap = null
       const DOUBLE_TAP_MS = 400
       const DOUBLE_TAP_DISTANCE = 8
       let toolbarDrag = null
@@ -243,6 +336,8 @@
         logInteraction('模式切换', `${MODE_LABELS[prev]} → ${MODE_LABELS[next]}`, { mode: next })
         screenGesture = null
         lastProgramTap = null
+        clearCoordFill()
+        clearTemplateFill()
         removeGestureListeners()
         clearCursor()
         templateRect.value = null
@@ -333,6 +428,79 @@
           }
           lastProgramTap = null
           logInteraction('编程模式', '获取坐标', { x: start.x, y: start.y })
+          if (coordFillRange && monacoEditor) {
+            const plan = coordFillPlan
+            const range = coordFillRange
+            coordFillRange = null
+            const stepIndex = plan ? plan.index : 0
+            const total = plan ? plan.ranges.length : 1
+            const text = `${start.x}, ${start.y}`
+            const model = monacoEditor.getModel()
+            const lineNumber = range.startLineNumber
+            const delta = text.length - (range.endColumn - range.startColumn)
+            if (plan && stepIndex < total - 1) {
+              for (let i = stepIndex + 1; i < total; i += 1) {
+                plan.ranges[i].startColumn += delta
+                plan.ranges[i].endColumn += delta
+              }
+            }
+            coordFillEditing = true
+            monacoEditor.pushUndoStop()
+            monacoEditor.executeEdits('weditor-coord-fill', [{
+              range,
+              text,
+              forceMoveMarkers: true,
+            }])
+            monacoEditor.pushUndoStop()
+            coordFillEditing = false
+            if (plan && stepIndex < total - 1) {
+              plan.index += 1
+              coordFillRange = plan.ranges[plan.index]
+              coordHintText.value = `双击 Screen 填充终点 x2, y2（${plan.index + 1}/${total}）`
+              monacoEditor.setSelection(coordFillRange)
+              monacoEditor.revealRangeInCenter(coordFillRange)
+              monacoEditor.focus()
+              ElMessage({ message: coordHintText.value, type: 'info', duration: 3000 })
+              logInteraction('编程模式', '双击 Screen 填充起点 x1, y1（1/2）', { x: start.x, y: start.y })
+              return
+            }
+            const maxColumn = model.getLineMaxColumn(lineNumber)
+            const indent = (model.getLineContent(lineNumber).match(/^\s*/) || [''])[0]
+            monacoEditor.setPosition({ lineNumber, column: maxColumn })
+            const edits = []
+            let cursorColumn
+            if (lineNumber < model.getLineCount()) {
+              cursorColumn = ((model.getLineContent(lineNumber + 1).match(/^\s*/) || [''])[0]).length + 1
+            } else {
+              edits.push({
+                range: {
+                  startLineNumber: lineNumber,
+                  startColumn: maxColumn,
+                  endLineNumber: lineNumber,
+                  endColumn: maxColumn,
+                },
+                text: '\n' + indent,
+                forceMoveMarkers: true,
+              })
+              cursorColumn = indent.length + 1
+            }
+            if (edits.length) {
+              coordFillEditing = true
+              monacoEditor.pushUndoStop()
+              monacoEditor.executeEdits('weditor-coord-newline', edits)
+              monacoEditor.pushUndoStop()
+              coordFillEditing = false
+            }
+            monacoEditor.setPosition({ lineNumber: lineNumber + 1, column: cursorColumn })
+            monacoEditor.focus()
+            activeSnippet.value = plan ? plan.kind : 'touch'
+            logInteraction('编程模式', '双击 Screen 填充坐标并换行', {
+              x: start.x, y: start.y, text,
+              steps: total,
+            })
+            clearCoordFill()
+            return
+          }
           const code = C.genTouch(start.x, start.y)
           const inserted = insertAtCursor(code)
           logInteraction('编程模式', '双击插入坐标代码到 Coding 当前位置', {
@@ -343,9 +511,33 @@
         }
 
         if (gesture.mode === 'template') {
-          const rect = updateTemplateSelection(e, gesture.startFrame)
-          logInteraction('模板模式', '框选完成', { deviceStart: start, deviceEnd: end })
-          logInteraction('模板模式', '边框渲染（完成）', rect)
+          const hasDrag = Math.abs(end.x - start.x) >= 2 || Math.abs(end.y - start.y) >= 2
+          const now = Date.now()
+          const isDoubleTap = !hasDrag && lastTemplateTap
+            && now - lastTemplateTap.time <= DOUBLE_TAP_MS
+            && Math.hypot(e.clientX - lastTemplateTap.x, e.clientY - lastTemplateTap.y) <= DOUBLE_TAP_DISTANCE
+          lastTemplateTap = hasDrag ? null : { time: now, x: e.clientX, y: e.clientY }
+          if (templateBounds && isDoubleTap) {
+            const bounds = templateBounds
+            templateBounds = null
+            saveTemplateForWait(bounds)
+            return
+          }
+          if (hasDrag) {
+            const rect = updateTemplateSelection(e, gesture.startFrame)
+            logInteraction('模板模式', '框选完成', { deviceStart: start, deviceEnd: end })
+            logInteraction('模板模式', '边框渲染（完成）', rect)
+            if (pendingTemplateFill.value) {
+              templateBounds = [
+                Math.min(start.x, end.x),
+                Math.min(start.y, end.y),
+                Math.max(start.x, end.x),
+                Math.max(start.y, end.y),
+              ]
+              templateHintText.value = '双击 Screen 确认保存模板'
+              ElMessage({ message: templateHintText.value, type: 'info', duration: 4000 })
+            }
+          }
         }
       }
 
@@ -842,6 +1034,243 @@
         return true
       }
 
+      function insertSnippet(code) {
+        if (!monacoEditor) {
+          const current = editor.code.value
+          const lead = current && !current.endsWith('\n') ? '\n' : ''
+          editor.code.value = current + lead + code + '\n'
+          return null
+        }
+        const model = monacoEditor.getModel()
+        const selection = monacoEditor.getSelection()
+        const startPos = selection.getStartPosition()
+        const startText = model.getLineContent(selection.startLineNumber)
+        const endText = model.getLineContent(selection.endLineNumber)
+        const before = startText.slice(0, Math.max(0, selection.startColumn - 1))
+        const after = endText.slice(Math.max(0, selection.endColumn - 1))
+        const indent = (startText.match(/^\s*/) || [''])[0]
+        const prefix = before.trim() ? '\n' + indent : ''
+        const suffix = after.length ? '\n' + indent : ''
+        monacoEditor.pushUndoStop()
+        monacoEditor.executeEdits('weditor-coding-actions', [{
+          range: selection,
+          text: prefix + code + suffix,
+          forceMoveMarkers: true,
+        }])
+        monacoEditor.pushUndoStop()
+        monacoEditor.focus()
+        return { model, startPos, prefix }
+      }
+
+      function screenshotBase64() {
+        const value = screenImg.value
+        if (typeof value === 'string' && value.startsWith('data:')) {
+          const comma = value.indexOf(',')
+          if (comma >= 0) return value.slice(comma + 1)
+        }
+        return localStorage.getItem('screenshotBase64') || ''
+      }
+
+      async function currentScreenshotBase64() {
+        const img = screenImgEl.value
+        if (img && img.complete && img.naturalWidth && img.naturalHeight) {
+          try {
+            const canvas = document.createElement('canvas')
+            canvas.width = img.naturalWidth
+            canvas.height = img.naturalHeight
+            canvas.getContext('2d').drawImage(img, 0, 0)
+            return canvas.toDataURL('image/jpeg').split(',')[1]
+          } catch (e) {}
+        }
+        return screenshotBase64()
+      }
+
+      function screenshotBounds(bounds) {
+        const img = screenImgEl.value
+        const size = deviceCoordinateSize.value
+        if (!img || !img.naturalWidth || !size || !size.width || !size.height) return bounds
+        const sx = img.naturalWidth / size.width
+        const sy = img.naturalHeight / size.height
+        return bounds.map((value, index) => Math.round(value * (index % 2 === 0 ? sx : sy)))
+      }
+
+      function newlineAfterCommand(lineNumber) {
+        if (!monacoEditor) return
+        const model = monacoEditor.getModel()
+        const maxColumn = model.getLineMaxColumn(lineNumber)
+        const indent = (model.getLineContent(lineNumber).match(/^\s*/) || [''])[0]
+        const edits = []
+        let cursorColumn
+        if (lineNumber < model.getLineCount()) {
+          cursorColumn = ((model.getLineContent(lineNumber + 1).match(/^\s*/) || [''])[0]).length + 1
+        } else {
+          edits.push({
+            range: {
+              startLineNumber: lineNumber,
+              startColumn: maxColumn,
+              endLineNumber: lineNumber,
+              endColumn: maxColumn,
+            },
+            text: '\n' + indent,
+            forceMoveMarkers: true,
+          })
+          cursorColumn = indent.length + 1
+        }
+        if (edits.length) {
+          monacoEditor.pushUndoStop()
+          monacoEditor.executeEdits('weditor-command-newline', edits)
+          monacoEditor.pushUndoStop()
+        }
+        monacoEditor.setPosition({ lineNumber: lineNumber + 1, column: cursorColumn })
+        monacoEditor.focus()
+      }
+
+      async function saveTemplateForWait(bounds) {
+        if (!monacoEditor) return
+        if (!templateFillRange) {
+          ElMessage.error('模板参数选中状态已失效，请重新点击 wait')
+          clearTemplateFill()
+          return
+        }
+        const range = templateFillRange
+        const lineNumber = range.startLineNumber
+        templateFillRange = null
+        const name = 'temp_' + Date.now()
+        try {
+          const shot = await currentScreenshotBase64()
+          if (!shot) throw new Error('当前截图为空，请先刷新截图')
+          const croppedBounds = screenshotBounds(bounds)
+          const resp = await fetch('/api/v1/template', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              screenshot: shot,
+              bounds: croppedBounds,
+              name,
+            }),
+          }).then(r => r.json())
+          if (!resp.success) throw new Error(resp.description || 'save failed')
+          monacoEditor.pushUndoStop()
+          monacoEditor.executeEdits('weditor-template-fill', [{
+            range,
+            text: resp.path,
+            forceMoveMarkers: true,
+          }])
+          monacoEditor.pushUndoStop()
+          monacoEditor.setPosition({ lineNumber, column: range.startColumn + String(resp.path).length })
+          newlineAfterCommand(lineNumber)
+          activeSnippet.value = 'wait'
+          loadTemplateAssets()
+          ElMessage.success('已保存模板并填充路径')
+          logInteraction('模板模式', '框选截图保存并填充 wait 参数', { name, path: resp.path, bounds })
+        } catch (e) {
+          ElMessage.error('模板截图保存失败: ' + (e && e.message ? e.message : String(e)))
+        } finally {
+          clearTemplateFill()
+          templateRect.value = null
+        }
+      }
+
+      function useAction(action) {
+        if (!codingMode.value) return
+        if (action.id === 'wait') editor.tapMode.value = 'template'
+        const inserted = insertSnippet(action.code)
+        activeSnippet.value = action.id
+        if (action.id === 'wait' && inserted) {
+          clearCoordFill()
+          clearTemplateFill()
+          const placeholder = 'tpl.png'
+          const offset = inserted.model.getOffsetAt(inserted.startPos)
+            + inserted.prefix.length + action.code.indexOf(placeholder)
+          const p1 = inserted.model.getPositionAt(offset)
+          const p2 = inserted.model.getPositionAt(offset + placeholder.length)
+          templateFillRange = {
+            startLineNumber: p1.lineNumber,
+            startColumn: p1.column,
+            endLineNumber: p2.lineNumber,
+            endColumn: p2.column,
+          }
+          monacoEditor.setSelection(templateFillRange)
+          monacoEditor.revealRangeInCenter(templateFillRange)
+          pendingTemplateFill.value = true
+          templateHintText.value = '在 Screen 框选范围后截图保存模板'
+          ElMessage({
+            message: templateHintText.value,
+            type: 'info',
+            duration: 4000,
+          })
+          return
+        }
+        if (action.id === 'log' && inserted) {
+          clearCoordFill()
+          clearTemplateFill()
+          const placeholder = 'message'
+          const offset = inserted.model.getOffsetAt(inserted.startPos)
+            + inserted.prefix.length + action.code.indexOf(placeholder)
+          const p1 = inserted.model.getPositionAt(offset)
+          const p2 = inserted.model.getPositionAt(offset + placeholder.length)
+          monacoEditor.setSelection({
+            startLineNumber: p1.lineNumber,
+            startColumn: p1.column,
+            endLineNumber: p2.lineNumber,
+            endColumn: p2.column,
+          })
+          monacoEditor.revealRangeInCenter(monacoEditor.getSelection())
+          ElMessage({
+            message: '已插入 log 代码，可直接输入日志内容',
+            type: 'info',
+            duration: 2000,
+          })
+          return
+        }
+        const placeholders = action.id === 'touch' ? ['x, y']
+          : action.id === 'swipe' ? ['x1, y1', 'x2, y2'] : null
+        if (placeholders && editor.tapMode.value === 'coordinate' && inserted) {
+          clearCoordFill()
+          const baseOffset = inserted.model.getOffsetAt(inserted.startPos) + inserted.prefix.length
+          const ranges = placeholders.map((placeholder) => {
+            const offset = baseOffset + action.code.indexOf(placeholder)
+            const p1 = inserted.model.getPositionAt(offset)
+            const p2 = inserted.model.getPositionAt(offset + placeholder.length)
+            return {
+              startLineNumber: p1.lineNumber,
+              startColumn: p1.column,
+              endLineNumber: p2.lineNumber,
+              endColumn: p2.column,
+            }
+          })
+          coordFillPlan = { kind: action.id, ranges, index: 0 }
+          coordFillRange = ranges[0]
+          monacoEditor.setSelection(coordFillRange)
+          monacoEditor.revealRangeInCenter(coordFillRange)
+          pendingCoordHint.value = true
+          coordHintText.value = action.id === 'swipe'
+            ? '双击 Screen 填充起点 x1, y1（1/2）'
+            : '双击 Screen 填充 x, y'
+          ElMessage({
+            message: coordHintText.value,
+            type: 'info',
+            duration: 4000,
+          })
+          return
+        }
+        clearCoordFill()
+        clearTemplateFill()
+        ElMessage({
+          message: '已插入 ' + action.label + ' 代码',
+          type: 'success',
+          duration: 1200,
+        })
+      }
+
+      function toggleActions() {
+        actionsCollapsed.value = !actionsCollapsed.value
+      }
+
+      function actionGroupName(group) {
+        return ACTION_GROUP_LABELS[group] || ''
+      }
+
       async function loadTemplateAssets() {
         templateAssetsLoading.value = true
         try {
@@ -903,7 +1332,28 @@
               quickSuggestions: { other: true, comments: false, strings: false },
               suggestOnTriggerCharacters: true,
             })
-            monacoEditor.onDidChangeModelContent(() => { editor.code.value = monacoEditor.getValue() })
+            monacoEditor.onDidChangeModelContent(() => {
+              editor.code.value = monacoEditor.getValue()
+              if (!coordFillEditing && coordFillRange) clearCoordFill()
+              if (templateFillRange) clearTemplateFill()
+            })
+            monacoEditor.onDidChangeCursorSelection((e) => {
+              const s = e.selection
+              if (coordFillRange && !coordFillEditing) {
+                const r = coordFillRange
+                if (s.startLineNumber !== r.startLineNumber || s.startColumn !== r.startColumn
+                  || s.endLineNumber !== r.endLineNumber || s.endColumn !== r.endColumn) {
+                  clearCoordFill()
+                }
+              }
+              if (templateFillRange) {
+                const r = templateFillRange
+                if (s.startLineNumber !== r.startLineNumber || s.startColumn !== r.startColumn
+                  || s.endLineNumber !== r.endLineNumber || s.endColumn !== r.endColumn) {
+                  clearTemplateFill()
+                }
+              }
+            })
             monaco.languages.registerCompletionItemProvider('python', {
               provideCompletionItems: (model, position) => {
                 const word = model.getWordUntilPosition(position)
@@ -958,12 +1408,19 @@
         if (window.ResizeObserver && screenAreaEl.value) {
           new ResizeObserver(fitScreen).observe(screenAreaEl.value)
         }
+        if (window.ResizeObserver && codeWorkspaceEl.value) {
+          workspaceObserver = new ResizeObserver((entries) => {
+            workspaceWidth.value = entries[0].contentRect.width
+          })
+          workspaceObserver.observe(codeWorkspaceEl.value)
+        }
       })
       onBeforeUnmount(() => {
         stopSplitResize()
         stopToolbarDrag()
         closeMinicap()
         removeGestureListeners()
+        if (workspaceObserver) workspaceObserver.disconnect()
         window.removeEventListener('resize', fitScreen)
         window.removeEventListener('resize', onToolbarWindowResize)
       })
@@ -972,6 +1429,9 @@
         version, device, shell, editor, screenImg, selectedNode, selectedInfo,
         hierarchyTree, codeContainer, treeLabel, screenAreaEl, screenImgEl,
         screenPaneWidth, splitterActive, frameStyle, rightTab, codingMode, activeMode, templateRect,
+        codeWorkspaceEl, actionsCollapsed, actionsCompact, activeSnippet,
+        pendingCoordHint, coordHintText, pendingTemplateFill, templateHintText,
+        codingActions: CODING_ACTIONS,
         templateAssets, templateAssetsLoading,
         toolbarEl, toolbarStyle, toolbarDragging, screenshotLoading,
         screenMode, screenModeLabel, screenModeTitle, screenWebSocketUrl, minicapConnecting,
@@ -982,6 +1442,7 @@
         startToolbarDrag, refreshScreenshotFromToolbar, toggleScreenMode,
         onScreenMouseDown, onScreenMouseMove, onScreenMouseLeave,
         runCode, runSelected, runCurrentLine, shellInterrupt, shellRestart,
+        useAction, toggleActions, actionGroupName,
         genClearCode: C.genClearCode,
       }
     },
@@ -1061,7 +1522,7 @@
           ></div>
 
           <el-aside width="auto" class="pane code-pane">
-            <div class="code-workspace">
+            <div ref="codeWorkspaceEl" class="code-workspace">
               <el-tabs v-model="rightTab" class="right-tabs">
                 <el-tab-pane label="Coding" name="coding">
                   <div class="panel-title coding-toolbar">
@@ -1074,7 +1535,7 @@
                       inactive-text="操作"
                     />
                     <el-radio-group v-model="editor.tapMode.value" size="small">
-                      <el-radio-button value="coordinate">坐标</el-radio-button>
+                      <el-radio-button value="coordinate" :disabled="pendingTemplateFill">坐标</el-radio-button>
                       <el-radio-button value="template">模板</el-radio-button>
                     </el-radio-group>
                     <el-button size="small" type="primary" @click="runCode">Run</el-button>
@@ -1082,8 +1543,69 @@
                     <el-button size="small" @click="runCurrentLine">Line</el-button>
                     <el-button size="small" type="warning" :disabled="!shell.running.value" @click="shellInterrupt">Stop</el-button>
                     <el-button size="small" :loading="shell.restarting.value" @click="shellRestart">Restart</el-button>
+                    <span v-if="pendingCoordHint" class="coord-fill-hint">{{ coordHintText }}</span>
+                    <span v-else-if="pendingTemplateFill" class="coord-fill-hint">{{ templateHintText }}</span>
                   </div>
-                  <div ref="codeContainer" class="editor-container"></div>
+                  <div class="coding-body">
+                    <div class="coding-actions" :class="{ compact: actionsCompact }">
+                      <el-tooltip
+                        placement="top"
+                        effect="dark"
+                        :show-after="200"
+                        :popper-options="{ modifiers: [{ name: 'flip', enabled: false }] }"
+                      >
+                        <template #content>
+                          <div class="action-tip">
+                            <div class="action-tip-title">Code Actions · 代码快捷插入</div>
+                            <div class="action-tip-desc">{{ actionsCollapsed ? '展开工具栏' : '收起工具栏（仅保留图标）' }}</div>
+                          </div>
+                        </template>
+                        <button
+                          type="button"
+                          class="coding-actions-toggle"
+                          :aria-label="actionsCollapsed ? '展开工具栏' : '收起工具栏'"
+                          @click="toggleActions"
+                        >
+                          <span class="coding-actions-toggle-icon">{{ actionsCollapsed ? '»' : '«' }}</span>
+                          <span class="coding-actions-toggle-text">工具</span>
+                        </button>
+                      </el-tooltip>
+                      <el-tooltip
+                        v-for="action in codingActions"
+                        :key="action.id"
+                        placement="top"
+                        effect="dark"
+                        :show-after="300"
+                        :popper-options="{ modifiers: [{ name: 'flip', enabled: false }] }"
+                      >
+                        <template #content>
+                          <div class="action-tip">
+                            <div class="action-tip-title">{{ action.label }} · {{ action.name }}</div>
+                            <div class="action-tip-group">分组：{{ actionGroupName(action.group) }}</div>
+                            <div class="action-tip-desc">{{ action.description }}</div>
+                            <div class="action-tip-code">{{ action.code }}</div>
+                            <div v-if="!codingMode" class="action-tip-warn">请先将上方模式切换为「编程」</div>
+                          </div>
+                        </template>
+                        <span class="coding-action-wrap">
+                          <button
+                            type="button"
+                            class="coding-action"
+                            :class="{ active: activeSnippet === action.id }"
+                            :data-group="action.group"
+                            :disabled="!codingMode"
+                            :aria-pressed="activeSnippet === action.id"
+                            :aria-label="action.label + ' ' + action.name"
+                            @click="useAction(action)"
+                          >
+                            <span class="coding-action-icon" v-html="action.icon" aria-hidden="true"></span>
+                            <span class="coding-action-label">{{ action.label }}</span>
+                          </button>
+                        </span>
+                      </el-tooltip>
+                    </div>
+                    <div ref="codeContainer" class="editor-container"></div>
+                  </div>
                 </el-tab-pane>
                 <el-tab-pane label="Hierarchy" name="hierarchy">
                   <el-tree :data="hierarchyTree" node-key="_id" default-expand-all
