@@ -25,10 +25,15 @@
   const CODING_ACTIONS = [
     {
       id: 'touch', label: 'touch', name: '坐标点击', group: 'action',
-      description: '在指定坐标执行一次点击；模板模式下框选图像后生成 touch(Template(...))。',
+      description: '插入 touch((x, y)) 代码，双击 Screen 填充坐标。',
       code: 'touch((x, y))',
-      templateCode: 'touch(Template("tpl.png"))',
       icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11V5.5a1.5 1.5 0 0 1 3 0V10"/><path d="M12 10V4.5a1.5 1.5 0 0 1 3 0V10"/><path d="M15 10V6a1.5 1.5 0 0 1 3 0v8c0 4.2-2.6 7-6.5 7S6 18.4 6 14v-3a1.5 1.5 0 0 1 3 0v2"/></svg>',
+    },
+    {
+      id: 'touchTemplate', label: 'touch 模板', name: '模板点击', group: 'action',
+      description: '插入 touch(Template(...)) 代码，框选 Screen 图像保存模板并填充路径。',
+      code: 'touch(Template("tpl.png"))',
+      icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V5a1 1 0 0 1 1-1h4"/><path d="M15 4h4a1 1 0 0 1 1 1v4"/><path d="M20 15v4a1 1 0 0 1-1 1h-4"/><path d="M9 20H5a1 1 0 0 1-1-1v-4"/><circle cx="12" cy="12" r="2.5"/><path d="M12 7v2M12 15v2M7 12h2M15 12h2"/></svg>',
     },
     {
       id: 'wait', label: 'wait', name: '等待图像', group: 'assert',

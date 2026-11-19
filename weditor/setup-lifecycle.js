@@ -16,10 +16,21 @@ watch(rightTab, (tab) => {
   if (tab === 'assets') loadTemplateAssets()
 })
 
+// 自动连接：开关打开且连接地址非空时才触发，避免连接中重复请求。
+ctx.maybeAutoConnect = function maybeAutoConnect(reason) {
+  if (!device.autoConnect.value || device.connecting.value) return
+  if (!String(device.serial.value || '').trim()) return
+  console.info('[auto-connect] ' + reason + ': ' + device.serial.value)
+  ctx.doConnect()
+}
+watch(device.autoConnect, (on) => {
+  if (on) ctx.maybeAutoConnect('switch on')
+})
+
 onMounted(async () => {
   fetchVersion()
   loadProjectInfo()
-  loadServerTree()
+  const treePromise = loadServerTree()
   await nextTick()
   toolbarPos.value = clampToolbarPosition(toolbarPos.value.x, toolbarPos.value.y)
   const main = getMainElement()
@@ -29,6 +40,7 @@ onMounted(async () => {
   }
   onWorkspaceResize()
   await initMonaco()
+  window.addEventListener('keydown', onGlobalKeydown)
   window.addEventListener('resize', fitScreen)
   window.addEventListener('resize', onWorkspaceResize)
   window.addEventListener('resize', onToolbarWindowResize)
@@ -41,6 +53,9 @@ onMounted(async () => {
     })
     workspaceObserver.observe(codeWorkspaceEl.value)
   }
+  await treePromise
+  await ctx.restoreLastFile()
+  ctx.maybeAutoConnect('startup')
 })
 onBeforeUnmount(() => {
   stopSplitResize()
@@ -50,6 +65,7 @@ onBeforeUnmount(() => {
   closeMinicap()
   removeGestureListeners()
   if (workspaceObserver) workspaceObserver.disconnect()
+  window.removeEventListener('keydown', onGlobalKeydown)
   window.removeEventListener('resize', fitScreen)
   window.removeEventListener('resize', onWorkspaceResize)
   window.removeEventListener('resize', onToolbarWindowResize)

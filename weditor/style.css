@@ -53,8 +53,6 @@ html, body, body *, body *::before, body *::after {
   color: #e6a23c;
   white-space: nowrap;
 }
-.coding-mode-switch { flex: none; }
-.coding-mode-switch .el-switch__label { font-size: 12px; font-weight: normal; }
 .screen-pane { display: flex; flex-direction: column; overflow: hidden; }
 .screen-toolbar {
   display: flex;
@@ -316,7 +314,7 @@ html, body, body *, body *::before, body *::after {
   white-space: pre-wrap;
   word-break: break-all;
 }
-.action-tip-warn { margin-top: 6px; color: #ffb64d; }
+.action-tip-trigger { margin-top: 6px; color: #67c23a; white-space: normal; }
 .bottom-tabs { margin-top: 8px; }
 .console-panel {
   flex: none;

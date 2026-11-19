@@ -51,7 +51,8 @@ ctx.coordTipStyle = ref({})
 ctx.frameStyle = ref({})
 ctx.templateRect = ref(null)
 ctx.rightTab = ref('coding')
-ctx.codingMode = ref(false) // false=操作, true=编程
+// 当前选中的命令：插入代码后，等待用 Screen 鼠标填充代码参数；填充完成后取消选中。
+ctx.activeCommand = ref('')
 ctx.codeWorkspaceEl = ref(null)
 ctx.workspaceWidth = ref(0)
 ctx.explorerWidth = ref(loadExplorerWidth() + 'px')
@@ -86,17 +87,42 @@ ctx.clearTemplateFill = function clearTemplateFill() {
   pendingTemplateFill.value = false
   templateHintText.value = ''
 }
+// 参数填充完成（或代码直接插入完成）后取消选中。
+ctx.clearActiveCommand = function clearActiveCommand() {
+  activeCommand.value = ''
+  activeSnippet.value = ''
+  clearCoordFill()
+  clearTemplateFill()
+}
 watch(actionsCollapsed, (v) => {
   try { localStorage.setItem(ACTIONS_COLLAPSED_KEY, v ? '1' : '0') } catch (e) {}
   nextTick(() => { if (monacoEditor) monacoEditor.layout() })
 })
 ctx.templateAssets = ref([])
 ctx.templateAssetsLoading = ref(false)
-ctx.MODE_LABELS = { operate: '操作', program: '编程', template: '模板' }
-ctx.modeFrom = function modeFrom(coding, tap) {
-  return !coding ? 'operate' : (tap === 'template' ? 'template' : 'program')
+ctx.MODE_LABELS = { operate: '操作', template: '模板' }
+ctx.TEMPLATE_COMMANDS = ['touchTemplate', 'wait', 'exists']
+ctx.activeMode = computed(() => {
+  if (ctx.TEMPLATE_COMMANDS.includes(activeCommand.value)) return 'template'
+  return editor.tapMode.value === 'template' ? 'template' : 'operate'
+})
+// 命令 → 插入的代码与 Screen 鼠标触发关系（填充参数，而非执行设备手势）。
+ctx.COMMAND_TRIGGERS = {
+  touch: '已插入 touch((x, y))，双击 Screen 填充坐标',
+  touchTemplate: '已插入 touch(Template(...))，框选 Screen 图像保存模板并填充路径',
+  swipe: '已插入 swipe(...)，双击 Screen 依次填充起点与终点',
+  wait: '已插入 wait(...)，框选 Screen 图像保存模板并填充路径',
+  exists: '已插入 exists(...)，框选 Screen 图像保存模板并填充路径',
+  text: '已插入 text(...)，可直接在编辑器中修改文本',
+  keyevent: '已插入 keyevent(...)，可直接在编辑器中修改按键',
+  snapshot: '已插入 snapshot(...)',
+  sleep: '已插入 sleep(...)，可直接在编辑器中修改秒数',
+  log: '已插入 log(...)，可直接在编辑器中修改日志内容',
 }
-ctx.activeMode = computed(() => modeFrom(codingMode.value, editor.tapMode.value))
+ctx.activeCommandHint = computed(() => {
+  const command = activeCommand.value
+  return command ? ctx.COMMAND_TRIGGERS[command] || '' : ''
+})
 ctx.toolbarEl = ref(null)
 ctx.toolbarPos = ref(loadToolbarPosition())
 ctx.toolbarDragging = ref(false)
@@ -116,7 +142,10 @@ ctx.currentFileName = ref('未命名.py')
 ctx.fileDirty = ref(false)
 ctx.fileTreeData = ref([])
 ctx.selectedFileNode = ref(null)
-ctx.currentFilePath = ref('')
+ctx.currentFilePath = ref(localStorage.getItem('lastFilePath') || '')
+watch(currentFilePath, (v) => {
+  try { localStorage.setItem('lastFilePath', v || '') } catch (e) {}
+})
 ctx.fileSource = ref('server')
 ctx.workspaceLoading = ref(false)
 ctx.projectPath = ref('')

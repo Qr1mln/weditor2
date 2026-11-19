@@ -5,10 +5,8 @@ window.WEditorSetupModules.installGestures = function (ctx) {
 
 with (ctx) {
 watch(activeMode, (next, prev) => {
-  logInteraction('模式切换', `${MODE_LABELS[prev]} → ${MODE_LABELS[next]}`, { mode: next })
+  logInteraction('模式切换', `${MODE_LABELS[prev] || prev} → ${MODE_LABELS[next] || next}`, { mode: next })
   screenGesture = null
-  lastProgramTap = null
-  clearCoordFill()
   if (suppressTemplateClear) suppressTemplateClear = false
   else clearTemplateFill()
   removeGestureListeners()
@@ -63,40 +61,41 @@ ctx.onGestureUp = function onGestureUp(e) {
   const dy = end.y - start.y
   const distance = Math.sqrt(dx * dx + dy * dy)
 
-  if (gesture.mode === 'operate') {
-    if (distance <= 16) {
-      logInteraction('操作模式', '点击 Screen，下发 tap', { x: start.x, y: start.y })
-      runScreenGesture({ action: 'tap', x: start.x, y: start.y })
-    } else {
-      logInteraction('操作模式', '滑动 Screen，下发 swipe', {
-        x1: start.x, y1: start.y, x2: end.x, y2: end.y, duration: 0.5,
-      })
-      runScreenGesture({
-        action: 'swipe',
-        x1: start.x,
-        y1: start.y,
-        x2: end.x,
-        y2: end.y,
-        duration: 0.5,
-      })
+  if (gesture.mode === 'template') {
+    const hasDrag = Math.abs(end.x - start.x) >= 2 || Math.abs(end.y - start.y) >= 2
+    const now = Date.now()
+    const isDoubleTap = !hasDrag && lastTemplateTap
+      && now - lastTemplateTap.time <= DOUBLE_TAP_MS
+      && Math.hypot(e.clientX - lastTemplateTap.x, e.clientY - lastTemplateTap.y) <= DOUBLE_TAP_DISTANCE
+    lastTemplateTap = hasDrag ? null : { time: now, x: e.clientX, y: e.clientY }
+    if (templateBounds && isDoubleTap) {
+      const bounds = templateBounds
+      templateBounds = null
+      saveTemplateFill(bounds)
+      return
+    }
+    if (hasDrag) {
+      const rect = updateTemplateSelection(e, gesture.startFrame)
+      logInteraction('模板模式', '框选完成', { deviceStart: start, deviceEnd: end })
+      logInteraction('模板模式', '边框渲染（完成）', rect)
+      if (pendingTemplateFill.value) {
+        templateBounds = [
+          Math.min(start.x, end.x),
+          Math.min(start.y, end.y),
+          Math.max(start.x, end.x),
+          Math.max(start.y, end.y),
+        ]
+        templateHintText.value = '双击 Screen 确认保存模板'
+        ElMessage({ message: templateHintText.value, type: 'info', duration: 4000 })
+      }
     }
     return
   }
 
-  if (gesture.mode === 'program') {
+  // 命令处于选中状态：Screen 鼠标只用于给已插入的代码填充坐标参数。
+  if (activeCommand.value === 'touch' || activeCommand.value === 'swipe') {
     if (distance > 16) {
       lastProgramTap = null
-      logInteraction('编程模式', '拖拽 Screen，下发 swipe', {
-        x1: start.x, y1: start.y, x2: end.x, y2: end.y, duration: 0.5,
-      })
-      runScreenGesture({
-        action: 'swipe',
-        x1: start.x,
-        y1: start.y,
-        x2: end.x,
-        y2: end.y,
-        duration: 0.5,
-      })
       return
     }
     const now = Date.now()
@@ -106,12 +105,12 @@ ctx.onGestureUp = function onGestureUp(e) {
     if (!isDoubleTap) {
       lastProgramTap = { time: now, x: e.clientX, y: e.clientY }
       if (coordFillRange) {
-        logInteraction('编程模式', '等待双击（第二次点击后填充坐标）', { x: start.x, y: start.y })
+        logInteraction('命令工具栏', '等待双击（第二次点击后填充坐标）', { x: start.x, y: start.y })
       }
       return
     }
     lastProgramTap = null
-    logInteraction('编程模式', '获取坐标', { x: start.x, y: start.y })
+    logInteraction('命令工具栏', '获取坐标', { x: start.x, y: start.y })
     if (coordFillRange && monacoEditor) {
       const plan = coordFillPlan
       const range = coordFillRange
@@ -145,7 +144,6 @@ ctx.onGestureUp = function onGestureUp(e) {
         monacoEditor.revealRangeInCenter(coordFillRange)
         monacoEditor.focus()
         ElMessage({ message: coordHintText.value, type: 'info', duration: 3000 })
-        logInteraction('编程模式', '双击 Screen 填充起点 x1, y1（1/2）', { x: start.x, y: start.y })
         return
       }
       const maxColumn = model.getLineMaxColumn(lineNumber)
@@ -177,44 +175,28 @@ ctx.onGestureUp = function onGestureUp(e) {
       }
       monacoEditor.setPosition({ lineNumber: lineNumber + 1, column: cursorColumn })
       monacoEditor.focus()
-      activeSnippet.value = plan ? plan.kind : 'touch'
-      logInteraction('编程模式', '双击 Screen 填充坐标并换行', {
-        x: start.x, y: start.y, text,
-        steps: total,
-      })
-      clearCoordFill()
+      logInteraction('命令工具栏', '双击 Screen 填充坐标并换行', { x: start.x, y: start.y, text, steps: total })
+      clearActiveCommand()
     }
     return
   }
 
-  if (gesture.mode === 'template') {
-    const hasDrag = Math.abs(end.x - start.x) >= 2 || Math.abs(end.y - start.y) >= 2
-    const now = Date.now()
-    const isDoubleTap = !hasDrag && lastTemplateTap
-      && now - lastTemplateTap.time <= DOUBLE_TAP_MS
-      && Math.hypot(e.clientX - lastTemplateTap.x, e.clientY - lastTemplateTap.y) <= DOUBLE_TAP_DISTANCE
-    lastTemplateTap = hasDrag ? null : { time: now, x: e.clientX, y: e.clientY }
-    if (templateBounds && isDoubleTap) {
-      const bounds = templateBounds
-      templateBounds = null
-      saveTemplateFill(bounds)
-      return
-    }
-    if (hasDrag) {
-      const rect = updateTemplateSelection(e, gesture.startFrame)
-      logInteraction('模板模式', '框选完成', { deviceStart: start, deviceEnd: end })
-      logInteraction('模板模式', '边框渲染（完成）', rect)
-      if (pendingTemplateFill.value) {
-        templateBounds = [
-          Math.min(start.x, end.x),
-          Math.min(start.y, end.y),
-          Math.max(start.x, end.x),
-          Math.max(start.y, end.y),
-        ]
-        templateHintText.value = '双击 Screen 确认保存模板'
-        ElMessage({ message: templateHintText.value, type: 'info', duration: 4000 })
-      }
-    }
+  // 无命令选中：Screen 默认鼠标事件（点击 tap / 拖拽 swipe）。
+  if (distance <= 16) {
+    logInteraction('Screen', '点击 → tap', { x: start.x, y: start.y })
+    runScreenGesture({ action: 'tap', x: start.x, y: start.y })
+  } else {
+    logInteraction('Screen', '拖拽 → swipe', {
+      x1: start.x, y1: start.y, x2: end.x, y2: end.y, duration: 0.5,
+    })
+    runScreenGesture({
+      action: 'swipe',
+      x1: start.x,
+      y1: start.y,
+      x2: end.x,
+      y2: end.y,
+      duration: 0.5,
+    })
   }
 }
 
@@ -223,10 +205,9 @@ ctx.onScreenMouseDown = function onScreenMouseDown(e) {
   const mode = activeMode.value
   const point = toDevicePoint(e)
   if (!point) return
-  if (mode === 'operate' && !device.deviceId.value) return
   e.preventDefault()
   screenGesture = { start: point, mode, startFrame: toFramePoint(e) }
-  logInteraction('Screen', '点击', { mode: MODE_LABELS[mode], point })
+  logInteraction('Screen', '点击', { command: activeCommand.value || '默认', mode: MODE_LABELS[mode], point })
   if (mode === 'template') {
     logInteraction('模板模式', '开始框选（按住左键拖拽绘制）', screenGesture.startFrame)
   }
@@ -242,6 +223,19 @@ ctx.onScreenMouseMove = function onScreenMouseMove(e) {
 
 ctx.onScreenMouseLeave = function onScreenMouseLeave() {
   if (!screenGesture) clearCursor()
+}
+
+ctx.onGlobalKeydown = function onGlobalKeydown(e) {
+  if (e.key !== 'Escape' || !activeCommand.value) return
+  e.preventDefault()
+  logInteraction('命令工具栏', 'ESC 取消选中', { command: activeCommand.value })
+  screenGesture = null
+  lastProgramTap = null
+  templateBounds = null
+  templateRect.value = null
+  removeGestureListeners()
+  clearCursor()
+  clearActiveCommand()
 }
 
 }

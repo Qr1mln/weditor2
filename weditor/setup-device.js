@@ -50,7 +50,7 @@ ctx.doConnect = async function doConnect() {
       ElMessage.warning('Screenshot failed: ' + e.message)
     }
     shellRun(C.genPreloadCode(data.deviceId))
-    if (editor.code.value === '') {
+    if (editor.code.value === '' && !currentFilePath.value) {
       setCode(C.genClearCode(device.platform.value, device.serial.value))
     }
   } catch (e) {

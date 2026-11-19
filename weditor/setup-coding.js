@@ -100,7 +100,7 @@ ctx.saveTemplateFill = async function saveTemplateFill(bounds) {
   const actionId = templateFillAction || 'wait'
   if (!templateFillRange) {
     ElMessage.error('模板参数选中状态已失效，请重新点击 ' + actionId)
-    clearTemplateFill()
+    clearActiveCommand()
     return
   }
   const range = templateFillRange
@@ -114,11 +114,7 @@ ctx.saveTemplateFill = async function saveTemplateFill(bounds) {
     const resp = await fetch('/api/v1/template', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        screenshot: shot,
-        bounds: croppedBounds,
-        name,
-      }),
+      body: JSON.stringify({ screenshot: shot, bounds: croppedBounds, name }),
     }).then(r => r.json())
     if (!resp.success) throw new Error(resp.description || 'save failed')
     monacoEditor.pushUndoStop()
@@ -130,29 +126,31 @@ ctx.saveTemplateFill = async function saveTemplateFill(bounds) {
     monacoEditor.pushUndoStop()
     monacoEditor.setPosition({ lineNumber, column: range.startColumn + String(resp.path).length })
     newlineAfterCommand(lineNumber)
-    activeSnippet.value = actionId
     loadTemplateAssets()
     ElMessage.success('已保存模板并填充路径')
     logInteraction('模板模式', '框选截图保存并填充 ' + actionId + ' 参数', { name, path: resp.path, bounds })
   } catch (e) {
     ElMessage.error('模板截图保存失败: ' + (e && e.message ? e.message : String(e)))
   } finally {
-    clearTemplateFill()
+    clearActiveCommand()
     templateRect.value = null
   }
 }
 
 ctx.useAction = function useAction(action) {
-  if (!codingMode.value) return
-  const templateMode = action.id === 'wait' || action.id === 'exists'
-    || (action.id === 'touch' && editor.tapMode.value === 'template')
+  const templateMode = action.id === 'touchTemplate' || action.id === 'wait' || action.id === 'exists'
   if (templateMode && editor.tapMode.value !== 'template') {
     suppressTemplateClear = true
     editor.tapMode.value = 'template'
+  } else if (action.id === 'touch' && editor.tapMode.value !== 'coordinate') {
+    editor.tapMode.value = 'coordinate'
   }
   const code = templateMode && action.templateCode ? action.templateCode : action.code
   const inserted = insertSnippet(code)
   activeSnippet.value = action.id
+  activeCommand.value = action.id
+  logInteraction('命令工具栏', `插入 ${action.name} 代码`, { code, tapMode: editor.tapMode.value })
+
   if (templateMode && inserted) {
     clearCoordFill()
     clearTemplateFill()
@@ -172,11 +170,7 @@ ctx.useAction = function useAction(action) {
     monacoEditor.revealRangeInCenter(templateFillRange)
     pendingTemplateFill.value = true
     templateHintText.value = '在 Screen 框选范围后截图保存模板'
-    ElMessage({
-      message: templateHintText.value,
-      type: 'info',
-      duration: 4000,
-    })
+    ElMessage({ message: templateHintText.value, type: 'info', duration: 4000 })
     return
   }
   if (action.id === 'log' && inserted) {
@@ -194,17 +188,15 @@ ctx.useAction = function useAction(action) {
       endColumn: p2.column,
     })
     monacoEditor.revealRangeInCenter(monacoEditor.getSelection())
-    ElMessage({
-      message: '已插入 log 代码，可直接输入日志内容',
-      type: 'info',
-      duration: 2000,
-    })
+    ElMessage({ message: '已插入 log 代码，可直接输入日志内容', type: 'info', duration: 2000 })
+    clearActiveCommand()
     return
   }
   const placeholders = action.id === 'touch' ? ['x, y']
     : action.id === 'swipe' ? ['x1, y1', 'x2, y2'] : null
   if (placeholders && editor.tapMode.value === 'coordinate' && inserted) {
     clearCoordFill()
+    clearTemplateFill()
     const baseOffset = inserted.model.getOffsetAt(inserted.startPos) + inserted.prefix.length
     const ranges = placeholders.map((placeholder) => {
       const offset = baseOffset + action.code.indexOf(placeholder)
@@ -225,20 +217,13 @@ ctx.useAction = function useAction(action) {
     coordHintText.value = action.id === 'swipe'
       ? '双击 Screen 填充起点 x1, y1（1/2）'
       : '双击 Screen 填充 x, y'
-    ElMessage({
-      message: coordHintText.value,
-      type: 'info',
-      duration: 4000,
-    })
+    ElMessage({ message: coordHintText.value, type: 'info', duration: 4000 })
     return
   }
   clearCoordFill()
   clearTemplateFill()
-  ElMessage({
-    message: '已插入 ' + action.label + ' 代码',
-    type: 'success',
-    duration: 1200,
-  })
+  ElMessage({ message: '已插入 ' + action.label + ' 代码', type: 'success', duration: 1200 })
+  clearActiveCommand()
 }
 
 ctx.toggleActions = function toggleActions() {
@@ -338,8 +323,8 @@ ctx.initMonaco = function initMonaco() {
           const word = model.getWordUntilPosition(position)
           const range = {
             startLineNumber: position.lineNumber,
-            endLineNumber: position.lineNumber,
             startColumn: word.startColumn,
+            endLineNumber: position.lineNumber,
             endColumn: word.endColumn,
           }
           return {

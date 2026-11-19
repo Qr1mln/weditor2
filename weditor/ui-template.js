@@ -15,6 +15,12 @@ window.WEditorTemplate = `      <el-container class="layout">
             </div>
 
             <el-button size="small" type="primary" :loading="device.connecting.value" @click="doConnect">Connect</el-button>
+            <span class="menu-label">自动连接</span>
+            <el-switch
+              v-model="device.autoConnect.value"
+              size="small"
+              title="开启后，连接地址不为空时自动连接"
+            />
             <el-button size="small" :loading="device.loading.value" @click="dumpHierarchy">Dump</el-button>
           </div>
         </el-header>
@@ -73,13 +79,6 @@ window.WEditorTemplate = `      <el-container class="layout">
                 <el-tab-pane label="Coding" name="coding">
                   <div class="panel-title coding-toolbar">
                     Coding
-                    <el-switch
-                      v-model="codingMode"
-                      class="coding-mode-switch"
-                      size="small"
-                      active-text="编程"
-                      inactive-text="操作"
-                    />
                     <el-radio-group v-model="editor.tapMode.value" size="small">
                       <el-radio-button value="coordinate" :disabled="pendingTemplateFill">坐标</el-radio-button>
                       <el-radio-button value="template">模板</el-radio-button>
@@ -91,6 +90,7 @@ window.WEditorTemplate = `      <el-container class="layout">
                     <el-button size="small" :loading="shell.restarting.value" @click="shellRestart">Restart</el-button>
                     <span v-if="pendingCoordHint" class="coord-fill-hint">{{ coordHintText }}</span>
                     <span v-else-if="pendingTemplateFill" class="coord-fill-hint">{{ templateHintText }}</span>
+                    <span v-else-if="activeCommandHint" class="coord-fill-hint">{{ activeCommandHint }}</span>
                   </div>
                   <div class="coding-body">
                     <div class="coding-explorer" aria-label="Explorer" :style="{ width: explorerWidth }">
@@ -175,7 +175,7 @@ window.WEditorTemplate = `      <el-container class="layout">
                             <div class="action-tip-group">分组：{{ actionGroupName(action.group) }}</div>
                             <div class="action-tip-desc">{{ action.description }}</div>
                             <div class="action-tip-code">{{ action.code }}</div>
-                            <div v-if="!codingMode" class="action-tip-warn">请先将上方模式切换为「编程」</div>
+                            <div class="action-tip-trigger">触发：{{ COMMAND_TRIGGERS[action.id] }}</div>
                           </div>
                         </template>
                         <span class="coding-action-wrap">
@@ -184,7 +184,6 @@ window.WEditorTemplate = `      <el-container class="layout">
                             class="coding-action"
                             :class="{ active: activeSnippet === action.id }"
                             :data-group="action.group"
-                            :disabled="!codingMode"
                             :aria-pressed="activeSnippet === action.id"
                             :aria-label="action.label + ' ' + action.name"
                             @click="useAction(action)"

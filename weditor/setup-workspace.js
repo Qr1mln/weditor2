@@ -425,7 +425,7 @@ ctx.loadServerTree = async function loadServerTree() {
   }
 }
 
-ctx.openServerFile = async function openServerFile(data) {
+ctx.openServerFile = async function openServerFile(data, silent) {
   if (!data || data.type !== 'file') return
   if (!await confirmDiscardFile('打开其他文件')) return
   selectedFileNode.value = data
@@ -442,10 +442,45 @@ ctx.openServerFile = async function openServerFile(data) {
       suppressFileDirty = false
     }
     fileDirty.value = false
-    ElMessage.success('已打开 ' + currentFilePath.value)
+    if (!silent) ElMessage.success('已打开 ' + currentFilePath.value)
   } catch (e) {
     ElMessage.error('打开文件失败: ' + fileErrorText(e))
   }
+}
+
+ctx.restoreLastFile = async function restoreLastFile() {
+  const path = String(localStorage.getItem('lastFilePath') || '').trim()
+  if (!path) return false
+  const findFile = (items) => {
+    for (const item of items || []) {
+      if (item.type === 'file' && item.path === path) return item
+      if (item.children) {
+        const hit = findFile(item.children)
+        if (hit) return hit
+      }
+    }
+    return null
+  }
+  const node = findFile(fileTreeData.value)
+  if (!node) {
+    currentFilePath.value = ''
+    return false
+  }
+  const parts = path.split('/').filter(Boolean)
+  parts.pop()
+  let prefix = ''
+  parts.forEach((part) => {
+    prefix = prefix ? prefix + '/' + part : part
+    if (!expandedDirKeys.value.includes(prefix)) expandedDirKeys.value.push(prefix)
+  })
+  restoreExpandedKeys(expandedDirKeys.value)
+  await openServerFile(node, true)
+  nextTick(() => {
+    if (explorerTreeRef.value && explorerTreeRef.value.setCurrentKey) {
+      explorerTreeRef.value.setCurrentKey(path)
+    }
+  })
+  return true
 }
 
 ctx.saveServerFile = async function saveServerFile(text) {
