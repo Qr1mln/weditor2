@@ -538,3 +538,30 @@ body.toolbar-dragging, body.toolbar-dragging * {
   .floating-toolbar { padding: 4px; }
   .coding-body { gap: 4px; }
 }
+
+/* Monaco 补全项 hover 完整中文说明（不受原生详情面板裁切影响） */
+.weditor-suggest-tip {
+  position: fixed;
+  z-index: 5000;
+  max-width: 460px;
+  max-height: 420px;
+  overflow: auto;
+  padding: 8px 10px;
+  border: 1px solid #454545;
+  border-radius: 4px;
+  background: #252526;
+  color: #d4d4d4;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .5);
+  font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: normal;
+  pointer-events: none;
+}
+.weditor-suggest-tip .tip-line { margin: 0; }
+.weditor-suggest-tip .tip-line strong { color: #ffffff; font-family: Consolas, Monaco, monospace; }
+.weditor-suggest-tip .tip-line code {
+  font-family: Consolas, Monaco, monospace;
+  color: #ce9178;
+}
+.weditor-suggest-tip .tip-bullet { color: #dcdcaa; }

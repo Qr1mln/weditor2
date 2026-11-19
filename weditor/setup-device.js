@@ -85,29 +85,12 @@ ctx.treeLabel = function treeLabel(n) {
 ctx.onNodeClick = function onNodeClick(data) {
   if (!data.rect) return
   selectedNode.value = data
-  editor.generatedCode.value = C.genSelectorDisplay(data, editor.tapMode.value)
+  editor.generatedCode.value = C.genSelectorDisplay(data)
 }
 
 ctx.doTap = async function doTap() {
   if (!selectedNode.value) return
-  let code = editor.generatedCode.value || C.genTouchNode(selectedNode.value)
-  if (editor.tapMode.value === 'template' && selectedNode.value.rect) {
-    const r = selectedNode.value.rect
-    try {
-      const resp = await fetch('/api/v1/template', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          screenshot: localStorage.getItem('screenshotBase64') || '',
-          bounds: [r.x, r.y, r.x + r.width, r.y + r.height],
-        }),
-      }).then(r => r.json())
-      if (resp.success) {
-        code = C.genTemplateTap(resp.path)
-        loadTemplateAssets()
-      }
-    } catch (e) { ElMessage.error('Template crop failed: ' + e.message) }
-  }
+  const code = editor.generatedCode.value || C.genTouchNode(selectedNode.value)
   if (!code) return
   setCode(code)
   shellRun(code)

@@ -71,7 +71,6 @@ ctx.coordFillEditing = false
 ctx.templateFillRange = null
 ctx.templateBounds = null
 ctx.templateFillAction = null
-ctx.suppressTemplateClear = false
 ctx.workspaceObserver = null
 ctx.clearCoordFill = function clearCoordFill() {
   coordFillRange = null
@@ -87,10 +86,17 @@ ctx.clearTemplateFill = function clearTemplateFill() {
   pendingTemplateFill.value = false
   templateHintText.value = ''
 }
-// 参数填充完成（或代码直接插入完成）后取消选中。
+// 参数填充完成（或代码直接插入完成）后取消选中，并彻底复位 Screen 交互状态。
 ctx.clearActiveCommand = function clearActiveCommand() {
   activeCommand.value = ''
   activeSnippet.value = ''
+  screenGesture = null
+  lastProgramTap = null
+  lastTemplateTap = null
+  templateBounds = null
+  templateRect.value = null
+  clearCursor()
+  ctx.removeGestureListeners()
   clearCoordFill()
   clearTemplateFill()
 }
@@ -102,10 +108,9 @@ ctx.templateAssets = ref([])
 ctx.templateAssetsLoading = ref(false)
 ctx.MODE_LABELS = { operate: '操作', template: '模板' }
 ctx.TEMPLATE_COMMANDS = ['touchTemplate', 'wait', 'exists']
-ctx.activeMode = computed(() => {
-  if (ctx.TEMPLATE_COMMANDS.includes(activeCommand.value)) return 'template'
-  return editor.tapMode.value === 'template' ? 'template' : 'operate'
-})
+// Screen 模式只由当前选中的命令决定；没有命令时永远是默认的 tap/swipe。
+ctx.activeMode = computed(() =>
+  ctx.TEMPLATE_COMMANDS.includes(activeCommand.value) ? 'template' : 'operate')
 // 命令 → 插入的代码与 Screen 鼠标触发关系（填充参数，而非执行设备手势）。
 ctx.COMMAND_TRIGGERS = {
   touch: '已插入 touch((x, y))，双击 Screen 填充坐标',

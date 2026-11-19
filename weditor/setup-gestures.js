@@ -1,20 +1,9 @@
-/* WEditor setup module: gestures + mode watch */
+/* WEditor setup module: screen gestures + command state cleanup */
 (function () {
 window.WEditorSetupModules = window.WEditorSetupModules || {}
 window.WEditorSetupModules.installGestures = function (ctx) {
 
 with (ctx) {
-watch(activeMode, (next, prev) => {
-  logInteraction('模式切换', `${MODE_LABELS[prev] || prev} → ${MODE_LABELS[next] || next}`, { mode: next })
-  screenGesture = null
-  if (suppressTemplateClear) suppressTemplateClear = false
-  else clearTemplateFill()
-  removeGestureListeners()
-  clearCursor()
-  templateRect.value = null
-  logInteraction('模板模式', '边框渲染（清除：等待左键拖拽绘制）')
-})
-
 ctx.runScreenGesture = async function runScreenGesture(payload) {
   if (!device.deviceId.value) return
   const id = encodeURIComponent(device.deviceId.value)
@@ -229,12 +218,6 @@ ctx.onGlobalKeydown = function onGlobalKeydown(e) {
   if (e.key !== 'Escape' || !activeCommand.value) return
   e.preventDefault()
   logInteraction('命令工具栏', 'ESC 取消选中', { command: activeCommand.value })
-  screenGesture = null
-  lastProgramTap = null
-  templateBounds = null
-  templateRect.value = null
-  removeGestureListeners()
-  clearCursor()
   clearActiveCommand()
 }
 

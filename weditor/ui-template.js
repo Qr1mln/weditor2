@@ -79,10 +79,6 @@ window.WEditorTemplate = `      <el-container class="layout">
                 <el-tab-pane label="Coding" name="coding">
                   <div class="panel-title coding-toolbar">
                     Coding
-                    <el-radio-group v-model="editor.tapMode.value" size="small">
-                      <el-radio-button value="coordinate" :disabled="pendingTemplateFill">坐标</el-radio-button>
-                      <el-radio-button value="template">模板</el-radio-button>
-                    </el-radio-group>
                     <el-button size="small" type="primary" @click="runCode">Run</el-button>
                     <el-button size="small" @click="runSelected">Sel</el-button>
                     <el-button size="small" @click="runCurrentLine">Line</el-button>
@@ -235,7 +231,7 @@ window.WEditorTemplate = `      <el-container class="layout">
                       <el-button class="asset-delete" size="small" type="danger" plain @click="deleteTemplateAsset(item)">删除</el-button>
                     </div>
                   </div>
-                  <div v-else class="placeholder">暂无模板图片。在 Hierarchy 中选中节点，切到模板模式后点击 Tap，生成的图片会保存在这里。</div>
+                  <div v-else class="placeholder">暂无模板图片。在 Coding 工具栏选择 touch 模板 / wait / exists，然后在 Screen 框选图像即可保存。</div>
                 </el-tab-pane>
               </el-tabs>
               <div

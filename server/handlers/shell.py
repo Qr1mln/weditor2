@@ -32,6 +32,8 @@ class WinAsyncSubprocess(object):
         kwargs['stdin'] = subprocess.PIPE
         kwargs['stdout'] = subprocess.PIPE
         kwargs['stderr'] = subprocess.STDOUT
+        # 让脚本进程单独成组，Stop 时只中断这一组，不影响 weditor 自身。
+        kwargs['creationflags'] = subprocess.CREATE_NEW_PROCESS_GROUP
 
         self.proc = subprocess.Popen(*args, **kwargs)
         self.pid = self.proc.pid
@@ -184,24 +186,15 @@ class PythonShellHandler(tornado.websocket.WebSocketHandler):
 
     def send_keyboard_interrupt(self):
         if IS_WINDOWS:  # Windows
-            # On windows, it's not working with the following code
-            # - p.send_signal(signal.SIGINT)
-            # - os.kill(p.pid, signal.CTRL_C_EVENT)
-            # - subprocess.call(["taskkill", "/PID", str(p.pid)])
-            # But the following command works find
-            pid = self.__process.pid
+            # 只给脚本子进程所在的进程组发 CTRL_BREAK_EVENT（Python 会转成
+            # KeyboardInterrupt）。不要 FreeConsole/AttachConsole 再广播
+            # CTRL_C_EVENT，那会中断共享控制台的所有进程，包括 weditor 自身。
             import ctypes
-            k = ctypes.windll.kernel32
-
-            k.FreeConsole()  # Don't understand
-            k.AttachConsole(pid)
-            k.SetConsoleCtrlHandler(
-                None, True)  # Disable Ctrl-C handling for our program
-            k.GenerateConsoleCtrlEvent(signal.CTRL_C_EVENT, 0)  # SIGINT
-
-            # Re-enable Ctrl-C handling or any subsequently started
-            # programs will inherit the disabled state.
-            k.SetConsoleCtrlHandler(None, False)
+            ok = ctypes.windll.kernel32.GenerateConsoleCtrlEvent(
+                signal.CTRL_BREAK_EVENT, self.__process.pid)
+            if not ok:
+                logger.warning("send CTRL_BREAK_EVENT failed: %s",
+                               ctypes.get_last_error())
         else:
             self.__process.proc.send_signal(
                 signal.SIGINT)  # Linux is so simple

@@ -73,3 +73,30 @@ test('completions are airtest-only', () => {
   assert.ok(C.ANDROID_COMPLETIONS.some(c => c.value === 'input_text("你好")'))
   assert.ok(!C.ANDROID_COMPLETIONS.some(c => /uiautomator|\.xpath\(/.test(c.value)))
 })
+
+test('every completion has a Chinese API doc', () => {
+  assert.ok(C.AIRTEST_API_DOCS, 'AIRTEST_API_DOCS should exist')
+  const missing = C.ANDROID_COMPLETIONS.filter(c => !C.AIRTEST_API_DOCS[c.value]).map(c => c.value)
+  assert.deepEqual(missing, [], 'completions without doc: ' + missing.join(', '))
+  assert.ok(/touch/.test(C.AIRTEST_API_DOCS['touch((x, y))']))
+  assert.ok(/坐标|点击/.test(C.AIRTEST_API_DOCS['touch((x, y))']))
+})
+
+test('python completions cover keywords, builtins, imports and snippets', () => {
+  assert.ok(C.PYTHON_KEYWORDS.some(c => c.label === 'for' && c.kind === 'keyword'))
+  assert.ok(C.PYTHON_KEYWORDS.some(c => c.label === 'def'))
+  assert.ok(C.PYTHON_BUILTINS.some(c => c.label === 'print' && c.kind === 'function'))
+  assert.ok(C.PYTHON_BUILTINS.some(c => c.label === 'range'))
+  assert.ok(C.PYTHON_IMPORTS.some(c => c.label === 'airtest.core.api'))
+  assert.ok(C.PYTHON_SNIPPETS.some(c => c.label === 'for 循环' && c.snippet === true))
+  assert.ok(/\$\{1:/.test(C.PYTHON_SNIPPETS[0].insertText), 'snippet should have tab stops')
+})
+
+test('unified COMPLETIONS has docs and unique detail labels for hover', () => {
+  assert.ok(C.COMPLETIONS.length > 80)
+  const noDoc = C.COMPLETIONS.filter(c => !c.doc).map(c => c.label)
+  assert.deepEqual(noDoc, [], 'completions without doc: ' + noDoc.join(', '))
+  const details = C.COMPLETIONS.map(c => c.detail)
+  assert.equal(new Set(details).size, details.length, 'detail labels must be unique for hover lookup')
+  assert.ok(C.COMPLETIONS.every(c => c.kind && c.insertText))
+})

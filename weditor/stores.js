@@ -29,9 +29,7 @@
   const editor = {
     code: ref(''),
     generatedCode: ref(''),
-    tapMode: ref(localStorage.getItem('tapMode') || 'coordinate'),
   }
-  watch(editor.tapMode, v => localStorage.setItem('tapMode', v))
 
   window.WEditorStores = { device, shell, editor }
 })()

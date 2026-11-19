@@ -139,17 +139,11 @@ ctx.saveTemplateFill = async function saveTemplateFill(bounds) {
 
 ctx.useAction = function useAction(action) {
   const templateMode = action.id === 'touchTemplate' || action.id === 'wait' || action.id === 'exists'
-  if (templateMode && editor.tapMode.value !== 'template') {
-    suppressTemplateClear = true
-    editor.tapMode.value = 'template'
-  } else if (action.id === 'touch' && editor.tapMode.value !== 'coordinate') {
-    editor.tapMode.value = 'coordinate'
-  }
   const code = templateMode && action.templateCode ? action.templateCode : action.code
   const inserted = insertSnippet(code)
   activeSnippet.value = action.id
   activeCommand.value = action.id
-  logInteraction('命令工具栏', `插入 ${action.name} 代码`, { code, tapMode: editor.tapMode.value })
+  logInteraction('命令工具栏', `插入 ${action.name} 代码`, { code, mode: templateMode ? 'template' : 'operate' })
 
   if (templateMode && inserted) {
     clearCoordFill()
@@ -194,7 +188,7 @@ ctx.useAction = function useAction(action) {
   }
   const placeholders = action.id === 'touch' ? ['x, y']
     : action.id === 'swipe' ? ['x1, y1', 'x2, y2'] : null
-  if (placeholders && editor.tapMode.value === 'coordinate' && inserted) {
+  if (placeholders && inserted) {
     clearCoordFill()
     clearTemplateFill()
     const baseOffset = inserted.model.getOffsetAt(inserted.startPos) + inserted.prefix.length
@@ -282,14 +276,94 @@ ctx.runCurrentLine = function runCurrentLine() {
 }
 
 // ---------- Monaco (AMD) ----------
+ctx.installSuggestHover = function installSuggestHover(editor) {
+  const tip = document.createElement('div')
+  tip.className = 'weditor-suggest-tip'
+  tip.style.display = 'none'
+  document.body.appendChild(tip)
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch]))
+  }
+  function renderDoc(doc) {
+    return String(doc).split('\n').map(raw => {
+      let line = escapeHtml(raw)
+      if (/^\*\*.+\*\*$/.test(line)) line = '<strong>' + line.slice(2, -2) + '</strong>'
+      else line = line.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      line = line.replace(/`([^`]+)`/g, '<code>$1</code>')
+      if (/^\s*-\s+/.test(raw)) line = '<span class="tip-bullet">• </span>' + line.replace(/^\s*-\s+/, '')
+      if (!line.trim()) line = '&nbsp;'
+      return '<div class="tip-line">' + line + '</div>'
+    }).join('')
+  }
+  function hide() {
+    tip.style.display = 'none'
+    lastRow = null
+  }
+  function show(row, doc) {
+    tip.innerHTML = renderDoc(doc)
+    tip.style.display = 'block'
+    const widget = row.closest('.suggest-widget') || row.parentElement
+    const wr = widget.getBoundingClientRect()
+    const tr = tip.getBoundingClientRect()
+    const m = 8
+    let left = wr.right + m
+    if (left + tr.width > window.innerWidth - m) left = wr.left - tr.width - m
+    if (left < m) left = Math.max(m, Math.min(left, window.innerWidth - tr.width - m))
+    let top = wr.top
+    if (top + tr.height > window.innerHeight - m) top = Math.max(m, window.innerHeight - tr.height - m)
+    tip.style.left = Math.round(left) + 'px'
+    tip.style.top = Math.round(top) + 'px'
+  }
+
+  let lastRow = null
+  document.addEventListener('mouseover', (e) => {
+    const t = e.target
+    const row = t && t.closest ? t.closest('.suggest-widget .monaco-list-row') : null
+    const nativeDetails = document.querySelector('.suggest-details')
+    if (!row || row === lastRow || (nativeDetails && nativeDetails.getBoundingClientRect().width > 0)) {
+      if (!row) hide()
+      return
+    }
+    lastRow = row
+    const detailEl = row.querySelector('.details-label')
+    const detail = detailEl ? detailEl.textContent.trim() : ''
+    const item = (C.COMPLETIONS || []).find(c => c.detail === detail)
+    const doc = item && item.doc
+    if (!doc) { hide(); return }
+    show(row, doc)
+  })
+  document.addEventListener('mousedown', hide)
+  window.addEventListener('scroll', hide, true)
+  if (editor && editor.onDidBlurEditorWidget) editor.onDidBlurEditorWidget(hide)
+}
+
 ctx.initMonaco = function initMonaco() {
   return new Promise((resolve) => {
     require.config({ paths: { vs: '/static/vendor/monaco/vs' } })
     require(['vs/editor/editor.main'], function (monaco) {
+      monaco.editor.defineTheme('weditor-python', {
+        base: 'vs-dark',
+        inherit: true,
+        rules: [
+          { token: 'keyword', foreground: 'C586C0', fontStyle: 'bold' },
+          { token: 'keyword.control', foreground: 'C586C0', fontStyle: 'bold' },
+          { token: 'string', foreground: 'CE9178' },
+          { token: 'comment', foreground: '6A9955', fontStyle: 'italic' },
+          { token: 'number', foreground: 'B5CEA8' },
+          { token: 'identifier', foreground: '9CDCFE' },
+          { token: 'type.identifier', foreground: '4EC9B0' },
+          { token: 'delimiter', foreground: 'D4D4D4' },
+        ],
+        colors: {
+          'editor.foreground': '#D4D4D4',
+          'editorLineNumber.foreground': '#858585',
+        },
+      })
       monacoEditor = monaco.editor.create(codeContainer.value, {
         value: editor.code.value || C.genClearCode(device.platform.value, device.serial.value),
         language: 'python',
-        theme: 'vs-dark',
+        theme: 'weditor-python',
         automaticLayout: true,
         minimap: { enabled: false },
         quickSuggestions: { other: true, comments: false, strings: false },
@@ -298,8 +372,8 @@ ctx.initMonaco = function initMonaco() {
       monacoEditor.onDidChangeModelContent(() => {
         editor.code.value = monacoEditor.getValue()
         markFileDirty()
-        if (!coordFillEditing && coordFillRange) clearCoordFill()
-        if (templateFillRange) clearTemplateFill()
+        // 手动改代码等同于结束当前命令，避免填充状态残留导致 Screen 停在框选模式。
+        if ((!coordFillEditing && coordFillRange) || templateFillRange) clearActiveCommand()
       })
       monacoEditor.onDidChangeCursorSelection((e) => {
         const s = e.selection
@@ -318,6 +392,12 @@ ctx.initMonaco = function initMonaco() {
           }
         }
       })
+      const COMPLETION_KIND = {
+        function: monaco.languages.CompletionItemKind.Function,
+        keyword: monaco.languages.CompletionItemKind.Keyword,
+        module: monaco.languages.CompletionItemKind.Module,
+        snippet: monaco.languages.CompletionItemKind.Snippet,
+      }
       monaco.languages.registerCompletionItemProvider('python', {
         provideCompletionItems: (model, position) => {
           const word = model.getWordUntilPosition(position)
@@ -328,18 +408,22 @@ ctx.initMonaco = function initMonaco() {
             endColumn: word.endColumn,
           }
           return {
-            suggestions: C.ANDROID_COMPLETIONS.map(c => ({
-              label: c.value.split('(')[0].replace(/[^a-zA-Z_]/g, '') || c.name,
-              insertText: c.value,
-              kind: monaco.languages.CompletionItemKind.Function,
-              detail: 'airtest · ' + c.name,
-              filterText: c.value,
+            suggestions: (C.COMPLETIONS || []).map(c => ({
+              label: c.label,
+              insertText: c.insertText,
+              insertTextRules: c.snippet
+                ? monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet : undefined,
+              kind: COMPLETION_KIND[c.kind] || monaco.languages.CompletionItemKind.Text,
+              detail: c.detail,
+              documentation: c.doc ? { value: c.doc, isTrusted: true } : undefined,
+              filterText: c.filterText || c.label,
               sortText: c.name,
               range,
             })),
           }
         },
       })
+      ctx.installSuggestHover(monacoEditor)
       resolve()
     })
   })
