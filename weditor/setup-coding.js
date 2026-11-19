@@ -42,13 +42,13 @@ ctx.screenshotBase64 = function screenshotBase64() {
 }
 
 ctx.currentScreenshotBase64 = async function currentScreenshotBase64() {
-  const img = screenImgEl.value
-  if (img && img.complete && img.naturalWidth && img.naturalHeight) {
+  const source = screenImgEl.value
+  if (source && source.width && source.height) {
     try {
       const canvas = document.createElement('canvas')
-      canvas.width = img.naturalWidth
-      canvas.height = img.naturalHeight
-      canvas.getContext('2d').drawImage(img, 0, 0)
+      canvas.width = source.width
+      canvas.height = source.height
+      canvas.getContext('2d').drawImage(source, 0, 0)
       return canvas.toDataURL('image/jpeg').split(',')[1]
     } catch (e) {}
   }
@@ -56,11 +56,11 @@ ctx.currentScreenshotBase64 = async function currentScreenshotBase64() {
 }
 
 ctx.screenshotBounds = function screenshotBounds(bounds) {
-  const img = screenImgEl.value
+  const canvas = screenImgEl.value
   const size = deviceCoordinateSize.value
-  if (!img || !img.naturalWidth || !size || !size.width || !size.height) return bounds
-  const sx = img.naturalWidth / size.width
-  const sy = img.naturalHeight / size.height
+  if (!canvas || !canvas.width || !size || !size.width || !size.height) return bounds
+  const sx = canvas.width / size.width
+  const sy = canvas.height / size.height
   return bounds.map((value, index) => Math.round(value * (index % 2 === 0 ? sx : sy)))
 }
 

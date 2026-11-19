@@ -41,18 +41,15 @@ window.WEditorTemplate = `      <el-container class="layout">
               <div class="screen-meta" :title="screenMetaText">{{ screenMetaText }}</div>
             </div>
             <div class="screen-area" ref="screenAreaEl">
-              <div v-if="screenImg" class="screen-frame" :style="frameStyle">
-                <img
+              <div v-show="screenReady" class="screen-frame" :style="frameStyle">
+                <canvas
                   ref="screenImgEl"
-                  :src="screenImg"
                   class="screen-img"
-                  draggable="false"
-                  @load="fitScreen"
                   @mousedown="onScreenMouseDown"
                   @mousemove="onScreenMouseMove"
                   @mouseleave="onScreenMouseLeave"
                   @contextmenu.prevent
-                />
+                ></canvas>
                 <div
                   v-if="activeMode === 'template' && templateRect"
                   class="template-selection"
@@ -62,7 +59,7 @@ window.WEditorTemplate = `      <el-container class="layout">
                   {{ cursorPoint.x }}, {{ cursorPoint.y }}
                 </div>
               </div>
-              <div v-else class="placeholder">No screenshot. Connect &amp; Dump.</div>
+              <div v-if="!screenReady" class="placeholder">No screenshot. Connect &amp; Dump.</div>
             </div>
           </el-aside>
 
@@ -84,6 +81,9 @@ window.WEditorTemplate = `      <el-container class="layout">
                     <el-button size="small" @click="runCurrentLine">Line</el-button>
                     <el-button size="small" type="warning" :disabled="!shell.running.value" @click="shellInterrupt">Stop</el-button>
                     <el-button size="small" :loading="shell.restarting.value" @click="shellRestart">Restart</el-button>
+                    <span class="debug-mode-toggle" title="开启后逐行跟踪当前执行行；关闭时只执行脚本，不移动编辑器光标">
+                      <el-switch v-model="shell.debugMode.value" size="small" /> Debug
+                    </span>
                     <span v-if="pendingCoordHint" class="coord-fill-hint">{{ coordHintText }}</span>
                     <span v-else-if="pendingTemplateFill" class="coord-fill-hint">{{ templateHintText }}</span>
                     <span v-else-if="activeCommandHint" class="coord-fill-hint">{{ activeCommandHint }}</span>

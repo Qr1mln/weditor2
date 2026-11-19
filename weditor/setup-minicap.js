@@ -15,39 +15,35 @@ ctx.closeMinicap = function closeMinicap() {
     ws.onopen = ws.onmessage = ws.onerror = ws.onclose = null
     try { ws.close() } catch (e) {}
   }
-  if (minicapObjectUrl) {
-    URL.revokeObjectURL(minicapObjectUrl)
-    minicapObjectUrl = null
-  }
+  minicapPendingFrame = null
+  minicapFrameScheduled = false
+  minicapDrawing = false
   minicapConnecting.value = false
 }
 
-ctx.applyMinicapFrame = function applyMinicapFrame(data) {
-  let blob = null
-  if (data instanceof Blob) {
-    blob = data
-  } else if (data instanceof ArrayBuffer) {
-    blob = new Blob([data], { type: 'image/jpeg' })
-  } else if (typeof data === 'string') {
+// 背压：WS 每帧只覆盖 pending，绘制由 rAF 驱动；同一时刻只解码绘制一帧，慢设备自动丢掉过期帧。
+ctx.pumpMinicapFrame = function pumpMinicapFrame() {
+  if (minicapFrameScheduled || minicapDrawing || minicapPendingFrame === null) return
+  minicapFrameScheduled = true
+  window.requestAnimationFrame(async () => {
+    minicapFrameScheduled = false
+    const frame = minicapPendingFrame
+    minicapPendingFrame = null
+    if (frame === null || screenMode.value !== 'minicap') return
+    minicapDrawing = true
     try {
-      const msg = JSON.parse(data)
-      if (msg.data) {
-        const bytes = Uint8Array.from(atob(msg.data), c => c.charCodeAt(0))
-        blob = new Blob([bytes], { type: 'image/' + (msg.type || 'jpeg') })
-      }
-    } catch (e) {
-      return
+      const ok = await drawScreenFrame(frame)
+      if (ok) screenReady.value = true
+    } finally {
+      minicapDrawing = false
+      if (minicapPendingFrame !== null) pumpMinicapFrame()
     }
-  }
-  if (!blob) return
-  const nextUrl = URL.createObjectURL(blob)
-  const prevUrl = minicapObjectUrl
-  minicapObjectUrl = nextUrl
-  screenImg.value = nextUrl
-  nextTick(() => {
-    fitScreen()
-    if (prevUrl) URL.revokeObjectURL(prevUrl)
   })
+}
+
+ctx.applyMinicapFrame = function applyMinicapFrame(data) {
+  minicapPendingFrame = data
+  pumpMinicapFrame()
 }
 
 ctx.connectMinicap = function connectMinicap() {

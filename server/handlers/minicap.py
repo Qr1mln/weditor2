@@ -30,6 +30,9 @@ def build_minicap_websocket_url(request, device_id):
 class MinicapWebSocketHandler(tornado.websocket.WebSocketHandler):
     """Bridge Airtest minicap JPEG frames to the browser as binary WS messages."""
 
+    # 降低 JPEG 质量以缩小每帧体积；保持原始分辨率，运行时模板匹配仍基于设备原图。
+    MINICAP_JPEG_QUALITY = 65
+
     def check_origin(self, origin):
         return True
 
@@ -37,6 +40,8 @@ class MinicapWebSocketHandler(tornado.websocket.WebSocketHandler):
         self.device_id = self.get_query_argument('deviceId', '')
         self.running = False
         self.minicap = None
+        self.latest_frame = None
+        self.write_scheduled = False
         self.io_loop = tornado.ioloop.IOLoop.current()
         try:
             device_obj = get_device(self.device_id).device
@@ -48,6 +53,9 @@ class MinicapWebSocketHandler(tornado.websocket.WebSocketHandler):
             except ImportError:
                 from airtest.core.android.minicap import Minicap
             self.minicap = Minicap(adb)
+            # airtest 的 CMD 是类属性，实例级覆盖以追加 -q 质量参数（不改分辨率）。
+            self.minicap.CMD = '%s -q %d' % (
+                self.minicap.CMD, self.MINICAP_JPEG_QUALITY)
             self.running = True
             self.io_loop.run_in_executor(None, self._stream_frames)
         except Exception as e:
@@ -64,10 +72,25 @@ class MinicapWebSocketHandler(tornado.websocket.WebSocketHandler):
                 break
             if not frame:
                 continue
-            self.io_loop.add_callback(self._write_frame, bytes(frame))
+            # 背压：慢客户端只拿最新帧，取帧线程不无限堆积待写消息。
+            self.latest_frame = bytes(frame)
+            if not self.write_scheduled:
+                self.write_scheduled = True
+                self.io_loop.add_callback(self._flush_frame)
         if self.running:
             self.running = False
             self.io_loop.add_callback(self.close, 1011, 'minicap stream ended')
+
+    def _flush_frame(self):
+        frame = self.latest_frame
+        self.latest_frame = None
+        self.write_scheduled = False
+        if frame:
+            self._write_frame(frame)
+        # flush 期间取帧线程可能又写入了新帧，不能让它滞留到下一帧才发出。
+        if self.latest_frame is not None and not self.write_scheduled:
+            self.write_scheduled = True
+            self.io_loop.add_callback(self._flush_frame)
 
     def _write_frame(self, frame):
         if self.ws_connection is None or self.ws_connection.is_closing():

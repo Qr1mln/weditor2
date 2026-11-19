@@ -19,6 +19,8 @@ ctx.doConnect = async function doConnect() {
     screenWebSocketUrl.value = data.screenWebSocketUrl || null
     closeMinicap()
     screenImg.value = null
+    screenReady.value = false
+    clearScreenFrame()
     deviceCoordinateSize.value = null
     screenshotSize.value = null
     displaySize.value = null

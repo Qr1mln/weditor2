@@ -29,6 +29,7 @@ with (ctx) {
   })
 ctx.version = ref('...')
 ctx.screenImg = ref(null)
+ctx.screenReady = ref(false)
 ctx.selectedNode = ref(null)
 ctx.hierarchyTree = ref([])
 ctx.codeContainer = ref(null)
@@ -177,8 +178,11 @@ ctx.toolbarDrag = null
 ctx.suppressToolbarClick = false
 ctx.hasConnectedOnce = false
 ctx.screenWs = null
-ctx.minicapObjectUrl = null
 ctx.minicapRetryTimer = null
+// minicap 背压：只保留最新一帧，pending 帧由 requestAnimationFrame 统一消费。
+ctx.minicapPendingFrame = null
+ctx.minicapFrameScheduled = false
+ctx.minicapDrawing = false
 
 ctx.selectedInfo = computed(() => selectedNode.value || {})
 
