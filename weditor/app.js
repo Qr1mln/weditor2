@@ -82,8 +82,9 @@
     },
     {
       id: 'exists', label: 'exists', name: '图像存在', group: 'assert',
-      description: '判断图像模板是否出现在当前屏幕，返回布尔值。',
+      description: '判断图像模板是否出现在当前屏幕；框选范围后自动填充模板路径。',
       code: 'exists(Template("tpl.png"))',
+      templateCode: 'exists(Template("tpl.png"))',
       icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/><path d="m7.5 10.5 2 2 4-4"/></svg>',
     },
     {
@@ -231,6 +232,7 @@
       let templateFillRange = null
       let templateBounds = null
       let templateFillAction = null
+      let suppressTemplateClear = false
       let workspaceObserver = null
       function clearCoordFill() {
         coordFillRange = null
@@ -401,7 +403,8 @@
         screenGesture = null
         lastProgramTap = null
         clearCoordFill()
-        clearTemplateFill()
+        if (suppressTemplateClear) suppressTemplateClear = false
+        else clearTemplateFill()
         removeGestureListeners()
         clearCursor()
         templateRect.value = null
@@ -1305,9 +1308,12 @@
 
       function useAction(action) {
         if (!codingMode.value) return
-        const templateMode = action.id === 'wait'
+        const templateMode = action.id === 'wait' || action.id === 'exists'
           || (action.id === 'touch' && editor.tapMode.value === 'template')
-        if (templateMode) editor.tapMode.value = 'template'
+        if (templateMode && editor.tapMode.value !== 'template') {
+          suppressTemplateClear = true
+          editor.tapMode.value = 'template'
+        }
         const code = templateMode && action.templateCode ? action.templateCode : action.code
         const inserted = insertSnippet(code)
         activeSnippet.value = action.id
