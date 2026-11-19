@@ -35,14 +35,16 @@ from tornado.concurrent import run_on_executor
 from tornado.escape import json_encode
 from tornado.log import enable_pretty_logging
 
-from .handlers.page import (
-    BaseHandler, DeviceConnectHandler,
-    DeviceGestureHandler, DeviceHierarchyHandler, DeviceHierarchyHandlerV2,
-    DeviceScreenshotHandler, DeviceTemplateHandler, DeviceTemplateListHandler,
-    FrontendHandler, MinicapWebSocketHandler, VersionHandler)
+from .handlers.base import BaseHandler
+from .handlers.device import (
+    DeviceConnectHandler, DeviceGestureHandler, DeviceHierarchyHandler,
+    DeviceHierarchyHandlerV2, DeviceScreenshotHandler)
 from .handlers.files import (
     ProjectHandler, WorkspaceContentHandler, WorkspaceFilesHandler)
+from .handlers.frontend import FrontendHandler, VersionHandler
+from .handlers.minicap import MinicapWebSocketHandler
 from .handlers.shell import PythonShellHandler
+from .handlers.template import DeviceTemplateHandler, DeviceTemplateListHandler
 from .utils import current_ip, tostr
 from .version import __version__
 

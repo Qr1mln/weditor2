@@ -6,6 +6,7 @@ import numpy as np
 from PIL import Image
 
 from server import device as devmod
+from server.devices import airtest as airmod
 from server.handlers import page as page_handlers
 from server.proto import PlatformEnum
 
@@ -92,8 +93,8 @@ def test_snapshot_failure_falls_back_to_blank_image():
 
 def test_connect_device_lowercase_prefix_and_cache():
     fake = FakeDevice()
-    with mock.patch.object(devmod, "at_connect_device"), \
-         mock.patch.object(devmod, "at_device", return_value=fake):
+    with mock.patch.object(airmod, "at_connect_device"), \
+         mock.patch.object(airmod, "at_device", return_value=fake):
         devmod.cached_devices.clear()
         did = devmod.connect_device(PlatformEnum.AndroidAirTest, "serial-001")
         assert did == "android:serial-001"
@@ -102,8 +103,8 @@ def test_connect_device_lowercase_prefix_and_cache():
 
 def test_get_device_rebuilds_from_lowercase_prefix():
     fake = FakeDevice()
-    with mock.patch.object(devmod, "at_connect_device"), \
-         mock.patch.object(devmod, "at_device", return_value=fake):
+    with mock.patch.object(airmod, "at_connect_device"), \
+         mock.patch.object(airmod, "at_device", return_value=fake):
         devmod.cached_devices.clear()
         devmod.connect_device(PlatformEnum.AndroidADB, "serial-002")
         devmod.cached_devices.clear()

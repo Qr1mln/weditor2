@@ -15,6 +15,10 @@
   <script src="/static/vendor/vue.global.prod.js"></script>
   <script src="/static/vendor/element-plus/index.full.min.js"></script>
   <script src="/static/codegen.js?v=20261118b"></script>
+  <script src="/static/constants.js?v=20261119a"></script>
+  <script src="/static/persistence.js?v=20261119a"></script>
+  <script src="/static/stores.js?v=20261119a"></script>
+  <script src="/static/ui-template.js?v=20261119a"></script>
   <script>
     // Monaco AMD loader (worker served from the same local vendor directory)
     window.MonacoEnvironment = {
@@ -22,6 +26,19 @@
     }
   </script>
   <script src="/static/vendor/monaco/vs/loader.js"></script>
-  <script src="/static/app.js?v=20261119v"></script>
+  <!-- setup() split into responsibility modules; load order matters -->
+  <script src="/static/setup-context.js?v=20261120a"></script>
+  <script src="/static/setup-state.js?v=20261120a"></script>
+  <script src="/static/setup-screen.js?v=20261120a"></script>
+  <script src="/static/setup-gestures.js?v=20261120a"></script>
+  <script src="/static/setup-refresh.js?v=20261120a"></script>
+  <script src="/static/setup-layout.js?v=20261120a"></script>
+  <script src="/static/setup-shell.js?v=20261120a"></script>
+  <script src="/static/setup-minicap.js?v=20261120a"></script>
+  <script src="/static/setup-device.js?v=20261120a"></script>
+  <script src="/static/setup-workspace.js?v=20261120a"></script>
+  <script src="/static/setup-coding.js?v=20261120a"></script>
+  <script src="/static/setup-lifecycle.js?v=20261120a"></script>
+  <script src="/static/app.js?v=20261120a"></script>
 </body>
 </html>

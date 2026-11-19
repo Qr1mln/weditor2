@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 from logzero import logger
 from tornado.escape import json_decode
 
-from .page import BaseHandler
+from .base import BaseHandler
 
 DEFAULT_ROOT = os.path.abspath(
     os.path.expanduser(os.environ.get("WEDITOR_WORKSPACE", "~/.weditor/workspace")))
