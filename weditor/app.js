@@ -92,7 +92,14 @@
       const cursorPoint = ref(null)
       const coordTipStyle = ref({})
       const frameStyle = ref({})
+      const templateRect = ref(null)
       const rightTab = ref('coding')
+      const codingMode = ref(false) // false=操作, true=编程
+      const MODE_LABELS = { operate: '操作', program: '编程', template: '模板' }
+      function modeFrom(coding, tap) {
+        return !coding ? 'operate' : (tap === 'template' ? 'template' : 'program')
+      }
+      const activeMode = computed(() => modeFrom(codingMode.value, editor.tapMode.value))
       const toolbarEl = ref(null)
       const toolbarPos = ref(loadToolbarPosition())
       const toolbarDragging = ref(false)
@@ -195,6 +202,47 @@
         cursorPoint.value = null
       }
 
+      function logInteraction(tag, message, detail) {
+        if (detail === undefined) console.log(`[${tag}] ${message}`)
+        else console.log(`[${tag}] ${message}`, detail)
+      }
+
+      function toFramePoint(e) {
+        const img = screenImgEl.value
+        if (!img) return null
+        const rect = img.getBoundingClientRect()
+        if (!rect.width || !rect.height) return null
+        return {
+          x: Math.min(Math.max(e.clientX - rect.left, 0), rect.width),
+          y: Math.min(Math.max(e.clientY - rect.top, 0), rect.height),
+        }
+      }
+
+      function updateTemplateSelection(e, startFrame) {
+        const endFrame = toFramePoint(e)
+        if (!endFrame || !startFrame) return null
+        const left = Math.round(Math.min(startFrame.x, endFrame.x))
+        const top = Math.round(Math.min(startFrame.y, endFrame.y))
+        const width = Math.max(2, Math.round(Math.abs(endFrame.x - startFrame.x)))
+        const height = Math.max(2, Math.round(Math.abs(endFrame.y - startFrame.y)))
+        templateRect.value = {
+          left: left + 'px',
+          top: top + 'px',
+          width: width + 'px',
+          height: height + 'px',
+        }
+        return templateRect.value
+      }
+
+      watch(activeMode, (next, prev) => {
+        logInteraction('模式切换', `${MODE_LABELS[prev]} → ${MODE_LABELS[next]}`, { mode: next })
+        screenGesture = null
+        removeGestureListeners()
+        clearCursor()
+        templateRect.value = null
+        logInteraction('模板模式', '边框渲染（清除：等待左键拖拽绘制）')
+      })
+
       async function runScreenGesture(payload) {
         if (!device.deviceId.value) return
         const id = encodeURIComponent(device.deviceId.value)
@@ -224,39 +272,78 @@
       }
 
       function onGestureMove(e) {
-        if (screenGesture) updateCursor(e)
+        if (!screenGesture) return
+        if (screenGesture.mode === 'template') updateTemplateSelection(e, screenGesture.startFrame)
+        else updateCursor(e)
       }
 
       function onGestureUp(e) {
         if (!screenGesture) return
         removeGestureListeners()
-        const start = screenGesture.start
+        const gesture = screenGesture
+        const start = gesture.start
         const end = toDevicePoint(e) || start
         screenGesture = null
         if (e.target !== screenImgEl.value) clearCursor()
         const dx = end.x - start.x
         const dy = end.y - start.y
         const distance = Math.sqrt(dx * dx + dy * dy)
-        if (distance <= 16) {
-          runScreenGesture({ action: 'tap', x: start.x, y: start.y })
-        } else {
-          runScreenGesture({
-            action: 'swipe',
-            x1: start.x,
-            y1: start.y,
-            x2: end.x,
-            y2: end.y,
-            duration: 0.5,
+
+        if (gesture.mode === 'operate') {
+          if (distance <= 16) {
+            logInteraction('操作模式', '点击 Screen，下发 tap', { x: start.x, y: start.y })
+            runScreenGesture({ action: 'tap', x: start.x, y: start.y })
+          } else {
+            logInteraction('操作模式', '滑动 Screen，下发 swipe', {
+              x1: start.x, y1: start.y, x2: end.x, y2: end.y, duration: 0.5,
+            })
+            runScreenGesture({
+              action: 'swipe',
+              x1: start.x,
+              y1: start.y,
+              x2: end.x,
+              y2: end.y,
+              duration: 0.5,
+            })
+          }
+          return
+        }
+
+        if (gesture.mode === 'program') {
+          if (distance > 16) {
+            logInteraction('编程模式', '检测到滑动，编程模式仅响应点击（已忽略）', {
+              from: start, to: end,
+            })
+            return
+          }
+          logInteraction('编程模式', '获取坐标', { x: start.x, y: start.y })
+          const text = `(${start.x}, ${start.y})`
+          logInteraction('编程模式', '插入坐标到 Coding 当前位置（占位，未实际写入）', {
+            text,
+            cursor: monacoEditor ? monacoEditor.getPosition() : null,
           })
+          return
+        }
+
+        if (gesture.mode === 'template') {
+          const rect = updateTemplateSelection(e, gesture.startFrame)
+          logInteraction('模板模式', '框选完成', { deviceStart: start, deviceEnd: end })
+          logInteraction('模板模式', '边框渲染（完成）', rect)
         }
       }
 
       function onScreenMouseDown(e) {
         if (e.button !== 0) return
+        const mode = activeMode.value
         const point = toDevicePoint(e)
-        if (!point || !device.deviceId.value) return
+        if (!point) return
+        if (mode === 'operate' && !device.deviceId.value) return
         e.preventDefault()
-        screenGesture = { start: point }
+        screenGesture = { start: point, mode, startFrame: toFramePoint(e) }
+        logInteraction('Screen', '点击', { mode: MODE_LABELS[mode], point })
+        if (mode === 'template') {
+          logInteraction('模板模式', '开始框选（按住左键拖拽绘制）', screenGesture.startFrame)
+        }
         updateCursor(e)
         removeGestureListeners()
         document.addEventListener('mousemove', onGestureMove)
@@ -816,7 +903,7 @@
       return {
         version, device, shell, editor, screenImg, selectedNode, selectedInfo,
         hierarchyTree, codeContainer, treeLabel, screenAreaEl, screenImgEl,
-        screenPaneWidth, splitterActive, frameStyle, rightTab,
+        screenPaneWidth, splitterActive, frameStyle, rightTab, codingMode, activeMode, templateRect,
         toolbarEl, toolbarStyle, toolbarDragging, screenshotLoading,
         screenMode, screenModeLabel, screenModeTitle, screenWebSocketUrl, minicapConnecting,
         screenInfoText, displaySizeText, zoomPercent, cursorText,
@@ -883,6 +970,11 @@
                   @mouseleave="onScreenMouseLeave"
                   @contextmenu.prevent
                 />
+                <div
+                  v-if="activeMode === 'template' && templateRect"
+                  class="template-selection"
+                  :style="templateRect"
+                ></div>
                 <div v-if="cursorPoint" class="coord-tip" :style="coordTipStyle">
                   {{ cursorPoint.x }}, {{ cursorPoint.y }}
                 </div>
@@ -902,8 +994,15 @@
             <div class="code-workspace">
               <el-tabs v-model="rightTab" class="right-tabs">
                 <el-tab-pane label="Coding" name="coding">
-                  <div class="panel-title">
+                  <div class="panel-title coding-toolbar">
                     Coding
+                    <el-switch
+                      v-model="codingMode"
+                      class="coding-mode-switch"
+                      size="small"
+                      active-text="编程"
+                      inactive-text="操作"
+                    />
                     <el-radio-group v-model="editor.tapMode.value" size="small">
                       <el-radio-button value="coordinate">坐标</el-radio-button>
                       <el-radio-button value="template">模板</el-radio-button>
