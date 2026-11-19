@@ -63,8 +63,9 @@
   const CODING_ACTIONS = [
     {
       id: 'touch', label: 'touch', name: '坐标点击', group: 'action',
-      description: '在指定坐标执行一次点击；双击左侧屏幕可插入真实坐标。',
+      description: '在指定坐标执行一次点击；模板模式下框选图像后生成 touch(Template(...))。',
       code: 'touch((x, y))',
+      templateCode: 'touch(Template("tpl.png"))',
       icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11V5.5a1.5 1.5 0 0 1 3 0V10"/><path d="M12 10V4.5a1.5 1.5 0 0 1 3 0V10"/><path d="M15 10V6a1.5 1.5 0 0 1 3 0v8c0 4.2-2.6 7-6.5 7S6 18.4 6 14v-3a1.5 1.5 0 0 1 3 0v2"/></svg>',
     },
     {
@@ -229,6 +230,7 @@
       let coordFillEditing = false
       let templateFillRange = null
       let templateBounds = null
+      let templateFillAction = null
       let workspaceObserver = null
       function clearCoordFill() {
         coordFillRange = null
@@ -239,6 +241,7 @@
       function clearTemplateFill() {
         templateFillRange = null
         templateBounds = null
+        templateFillAction = null
         lastTemplateTap = null
         pendingTemplateFill.value = false
         templateHintText.value = ''
@@ -581,7 +584,7 @@
           if (templateBounds && isDoubleTap) {
             const bounds = templateBounds
             templateBounds = null
-            saveTemplateForWait(bounds)
+            saveTemplateFill(bounds)
             return
           }
           if (hasDrag) {
@@ -1253,10 +1256,11 @@
         monacoEditor.focus()
       }
 
-      async function saveTemplateForWait(bounds) {
+      async function saveTemplateFill(bounds) {
         if (!monacoEditor) return
+        const actionId = templateFillAction || 'wait'
         if (!templateFillRange) {
-          ElMessage.error('模板参数选中状态已失效，请重新点击 wait')
+          ElMessage.error('模板参数选中状态已失效，请重新点击 ' + actionId)
           clearTemplateFill()
           return
         }
@@ -1287,10 +1291,10 @@
           monacoEditor.pushUndoStop()
           monacoEditor.setPosition({ lineNumber, column: range.startColumn + String(resp.path).length })
           newlineAfterCommand(lineNumber)
-          activeSnippet.value = 'wait'
+          activeSnippet.value = actionId
           loadTemplateAssets()
           ElMessage.success('已保存模板并填充路径')
-          logInteraction('模板模式', '框选截图保存并填充 wait 参数', { name, path: resp.path, bounds })
+          logInteraction('模板模式', '框选截图保存并填充 ' + actionId + ' 参数', { name, path: resp.path, bounds })
         } catch (e) {
           ElMessage.error('模板截图保存失败: ' + (e && e.message ? e.message : String(e)))
         } finally {
@@ -1301,15 +1305,18 @@
 
       function useAction(action) {
         if (!codingMode.value) return
-        if (action.id === 'wait') editor.tapMode.value = 'template'
-        const inserted = insertSnippet(action.code)
+        const templateMode = action.id === 'wait'
+          || (action.id === 'touch' && editor.tapMode.value === 'template')
+        if (templateMode) editor.tapMode.value = 'template'
+        const code = templateMode && action.templateCode ? action.templateCode : action.code
+        const inserted = insertSnippet(code)
         activeSnippet.value = action.id
-        if (action.id === 'wait' && inserted) {
+        if (templateMode && inserted) {
           clearCoordFill()
           clearTemplateFill()
           const placeholder = 'tpl.png'
           const offset = inserted.model.getOffsetAt(inserted.startPos)
-            + inserted.prefix.length + action.code.indexOf(placeholder)
+            + inserted.prefix.length + code.indexOf(placeholder)
           const p1 = inserted.model.getPositionAt(offset)
           const p2 = inserted.model.getPositionAt(offset + placeholder.length)
           templateFillRange = {
@@ -1318,6 +1325,7 @@
             endLineNumber: p2.lineNumber,
             endColumn: p2.column,
           }
+          templateFillAction = action.id
           monacoEditor.setSelection(templateFillRange)
           monacoEditor.revealRangeInCenter(templateFillRange)
           pendingTemplateFill.value = true
