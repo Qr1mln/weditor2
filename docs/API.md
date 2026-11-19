@@ -12,8 +12,9 @@ pip install weditor
 
 # Usage
 ```
-python -m server
+python -m weditor2 --workspace D:\work\myproject
 ```
+也可把目录作为位置参数 `python -m weditor2 D:\work\myproject`。省略时使用启动命令所在的工作目录。旧的 `python -m server` / `python -m weditor` 入口仍然可用。启动后文件栏的“项目”会显示该目录名。
 
 # API
 ### Get Version
@@ -32,80 +33,45 @@ Status: 200
 }
 ```
 
-## File API
+## File operations
 
-### Get contents
-This method returns the contents of a file or directory in a repository
+文件读写根目录由启动命令的 `--workspace` 参数（或位置参数）决定，所有接口只接受该目录内的相对路径，服务端会拒绝 `..`、绝对路径与越界路径。
 
+### Get project info
 ```
-GET /api/v1/contents/:path
+GET /api/v1/project
 ```
+返回 `{"success": true, "root": "绝对路径", "name": "目录名"}`。
 
-#### Response if content is a file
-Status: 200 OK
-
-```json
-{
-  "type": "file",
-  "encoding": "base64",
-  "size": 5362,
-  "name": "README.md",
-  "path": "README.md",
-  "content": "encoded content ...",
-  "sha": "3d21ec53a331a6f037a91c368710b99387d012c1"
-}
+### List directory
 ```
-
-#### Response if content is a directory
-Status: 200 OK
-
-```json
-[
-	{
-	  "type": "file",
-	  "size": 5362,
-	  "name": "README.md",
-	  "path": "README.md",
-	  "sha": "3d21ec53a331a6f037a91c368710b99387d012c1"
-	},
-	{
-	  "type": "dir",
-	  "size": 0,
-	  "name": "foo",
-	  "path": "foo",
-	}
-]
+GET /api/v1/files/list?dir=scripts
 ```
+`dir` 省略时列出根目录。返回 `{"success": true, "dir": "scripts", "entries": [{"name": "demo.py", "path": "scripts/demo.py", "type": "file"}]}`；目录项 `type` 为 `dir`，文件项为 `file`，目录排在前面。符号链接会被忽略。
 
-
-### Create a file
-This method creates a new file in repository
-
+### Read file
 ```
-POST /api/v1/contents/:path
+GET /api/v1/files/content?path=scripts/demo.py
 ```
+返回 `{"success": true, "path": "...", "name": "...", "content": "文件文本"}`。文件必须是 UTF-8 文本。
 
-#### Example Input
-```json
-{
-  "content": "bXkgbmV3IGZpbGUgY29udGVudHM="
-}
+### Save file
 ```
+PUT /api/v1/files/content
+Content-Type: application/json
 
-#### Response
-Status: 201 Created
-
-```json
-{
-	"content": {
-		"type": "file",
-		"name": "hello.txt",
-		"path": "notes/hello.txt",
-		"sha": "95b966ae1c166bd92f8ae7d1c313e738c731dfc3",
-		"size": 9
-	}
-}
+{"path": "scripts/demo.py", "content": "新的内容"}
 ```
+将内容写回已存在的文件（同目录临时文件 + 原子替换），不创建、不下载。
+
+### Create file
+```
+POST /api/v1/files
+Content-Type: application/json
+
+{"path": "scripts/new.py"}
+```
+在根目录下创建空文件；若文件已存在返回 409。
 
 ## Device API
 ### Get device list

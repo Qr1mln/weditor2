@@ -85,8 +85,17 @@ ctx.onGestureUp = function onGestureUp(e) {
 
   if (gesture.mode === 'program') {
     if (distance > 16) {
-      logInteraction('编程模式', '检测到滑动，编程模式仅响应点击（已忽略）', {
-        from: start, to: end,
+      lastProgramTap = null
+      logInteraction('编程模式', '拖拽 Screen，下发 swipe', {
+        x1: start.x, y1: start.y, x2: end.x, y2: end.y, duration: 0.5,
+      })
+      runScreenGesture({
+        action: 'swipe',
+        x1: start.x,
+        y1: start.y,
+        x2: end.x,
+        y2: end.y,
+        duration: 0.5,
       })
       return
     }
@@ -96,7 +105,9 @@ ctx.onGestureUp = function onGestureUp(e) {
       && Math.hypot(e.clientX - lastProgramTap.x, e.clientY - lastProgramTap.y) <= DOUBLE_TAP_DISTANCE
     if (!isDoubleTap) {
       lastProgramTap = { time: now, x: e.clientX, y: e.clientY }
-      logInteraction('编程模式', '等待双击（第二次点击后插入代码）', { x: start.x, y: start.y })
+      if (coordFillRange) {
+        logInteraction('编程模式', '等待双击（第二次点击后填充坐标）', { x: start.x, y: start.y })
+      }
       return
     }
     lastProgramTap = null
@@ -172,14 +183,7 @@ ctx.onGestureUp = function onGestureUp(e) {
         steps: total,
       })
       clearCoordFill()
-      return
     }
-    const code = C.genTouch(start.x, start.y)
-    const inserted = insertAtCursor(code)
-    logInteraction('编程模式', '双击插入坐标代码到 Coding 当前位置', {
-      code, inserted,
-      cursor: monacoEditor ? monacoEditor.getPosition() : null,
-    })
     return
   }
 

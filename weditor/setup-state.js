@@ -147,13 +147,21 @@ ctx.formatSize = function formatSize(size) {
   return size ? `${size.width} × ${size.height}` : '-'
 }
 
-ctx.screenInfoText = computed(() => {
-  return screenshotSize.value ? '截图 ' + formatSize(screenshotSize.value) : '-'
-})
-ctx.displaySizeText = computed(() => formatSize(displaySize.value))
 ctx.cursorText = computed(() => cursorPoint.value
   ? `${cursorPoint.value.x}, ${cursorPoint.value.y}`
   : '-')
+ctx.screenMetaText = computed(() => {
+  const parts = [screenModeLabel.value]
+  if (screenshotSize.value) parts.push(formatSize(screenshotSize.value))
+  if (displaySize.value) parts.push(formatSize(displaySize.value))
+  parts.push(zoomPercent.value + '%', '坐标 ' + cursorText.value)
+  return parts.join(' · ')
+})
+ctx.fileBrowserVisible = ref(false)
+ctx.fileBrowserDir = ref('')
+ctx.fileBrowserEntries = ref([])
+ctx.fileBrowserLoading = ref(false)
+ctx.fileBrowserError = ref('')
 
 
 }

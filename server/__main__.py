@@ -40,7 +40,8 @@ from .handlers.device import (
     DeviceConnectHandler, DeviceGestureHandler, DeviceHierarchyHandler,
     DeviceHierarchyHandlerV2, DeviceScreenshotHandler)
 from .handlers.files import (
-    ProjectHandler, WorkspaceContentHandler, WorkspaceFilesHandler)
+    ProjectHandler, WorkspaceContentHandler, WorkspaceFilesHandler,
+    WorkspaceListHandler, set_project_root)
 from .handlers.frontend import FrontendHandler, VersionHandler
 from .handlers.minicap import MinicapWebSocketHandler
 from .handlers.shell import PythonShellHandler
@@ -101,6 +102,7 @@ def make_app(settings={}):
             (r"/api/v1/template", DeviceTemplateHandler),
             (r"/api/v1/templates", DeviceTemplateListHandler),
             (r"/api/v1/files", WorkspaceFilesHandler),
+            (r"/api/v1/files/list", WorkspaceListHandler),
             (r"/api/v1/files/content", WorkspaceContentHandler),
             (r"/api/v1/project", ProjectHandler),
             (r"/api/v1/devices/([^/]+)/screenshot", DeviceScreenshotHandler),
@@ -214,7 +216,7 @@ def create_shortcut():
                                           shell.IID_IShellLink)
     launch_path = sys.executable
     shortcut.SetPath(launch_path)
-    shortcut.SetArguments("-m weditor")
+    shortcut.SetArguments("-m weditor2")
     shortcut.SetDescription(launch_path)
     shortcut.SetIconLocation(sys.executable, 0)
     shortcut.QueryInterface(pythoncom.IID_IPersistFile).Save(
@@ -225,6 +227,7 @@ def create_shortcut():
 def main():
     # yapf: disable
     ap = argparse.ArgumentParser(
+        prog='weditor2',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     ap.add_argument("-v", "--version", action="store_true", help="show version")
     ap.add_argument('-q', '--quiet', action='store_true', help='quite mode, no open new browser')
@@ -233,6 +236,10 @@ def main():
     ap.add_argument('--debug', action='store_true', help='open debug mode')
     ap.add_argument('--shortcut', action='store_true', help='create shortcut in desktop')
     ap.add_argument("--quit", action="store_true", help="stop weditor")
+    ap.add_argument("--workspace", dest="workspace_option", default=None,
+                    help="workspace folder for file operations (default: current working directory)")
+    ap.add_argument("project_dir", nargs="?", default=None,
+                    help="workspace folder (positional alternative to --workspace)")
     args = ap.parse_args()
     # yapf: enable
 
@@ -247,6 +254,12 @@ def main():
     if args.quit:
         cmd_quit(args.port)
         return
+
+    selected_dir = args.workspace_option or args.project_dir
+    try:
+        set_project_root(selected_dir or os.getcwd())
+    except NotADirectoryError as e:
+        sys.exit(str(e))
 
     if sys.platform == 'win32' and sys.version_info[:2] >= (3, 8):
         import asyncio

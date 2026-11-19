@@ -318,6 +318,90 @@ ctx.saveCodeFile = async function saveCodeFile() {
   }
 }
 
+ctx.apiRequest = async function apiRequest(url, options) {
+  let resp
+  try {
+    resp = await fetch(url, options)
+  } catch (e) {
+    throw new Error('无法连接本地服务：' + fileErrorText(e))
+  }
+  let data
+  try {
+    data = await resp.json()
+  } catch (e) {
+    throw new Error('服务端返回格式错误（HTTP ' + resp.status + '）')
+  }
+  if (!resp.ok || !data.success) {
+    throw new Error(data.error || data.description || ('请求失败（HTTP ' + resp.status + '）'))
+  }
+  return data
+}
+
+ctx.confirmDiscardFile = async function confirmDiscardFile(action) {
+  if (!fileDirty.value) return true
+  try {
+    await ElMessageBox.confirm(
+      '当前文件有未保存的修改，' + action + '后将丢弃。是否继续？', action,
+      { type: 'warning', confirmButtonText: '继续', cancelButtonText: '取消' })
+    return true
+  } catch (e) {
+    return false
+  }
+}
+
+ctx.browserParentDir = function browserParentDir(path) {
+  const parts = String(path || '').split('/').filter(Boolean)
+  parts.pop()
+  return parts.join('/')
+}
+
+ctx.loadFileBrowserDir = async function loadFileBrowserDir(dir) {
+  fileBrowserError.value = ''
+  fileBrowserLoading.value = true
+  try {
+    const data = await apiRequest('/api/v1/files/list?dir=' + encodeURIComponent(dir || ''))
+    fileBrowserDir.value = data.dir || ''
+    fileBrowserEntries.value = data.entries || []
+  } catch (e) {
+    fileBrowserError.value = fileErrorText(e)
+    fileBrowserEntries.value = []
+  } finally {
+    fileBrowserLoading.value = false
+  }
+}
+
+ctx.openServerFileBrowser = async function openServerFileBrowser() {
+  if (!await confirmDiscardFile('打开其他文件')) return
+  fileBrowserVisible.value = true
+  await loadFileBrowserDir('')
+}
+
+ctx.onFileBrowserEntryClick = async function onFileBrowserEntryClick(entry) {
+  if (!entry) return
+  if (entry.type === 'dir') {
+    await loadFileBrowserDir(entry.path)
+    return
+  }
+  if (!await confirmDiscardFile('打开其他文件')) return
+  try {
+    const data = await apiRequest(
+      '/api/v1/files/content?path=' + encodeURIComponent(entry.path))
+    currentFilePath.value = data.path || entry.path
+    currentFileName.value = data.name || entry.path.split('/').pop() || '未命名.py'
+    suppressFileDirty = true
+    try {
+      setCode(data.content || '')
+    } finally {
+      suppressFileDirty = false
+    }
+    fileDirty.value = false
+    fileBrowserVisible.value = false
+    ElMessage.success('已打开 ' + currentFilePath.value)
+  } catch (e) {
+    fileBrowserError.value = '打开文件失败：' + fileErrorText(e)
+  }
+}
+
 
 }
 }

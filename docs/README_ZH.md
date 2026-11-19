@@ -37,8 +37,10 @@ pip3 install -e web-editor
 
 ## 使用方法
 ```bash
-weditor # 启动server并打开浏览器
+python -m weditor2 --workspace D:\work\myproject
 ```
+
+`--workspace` 指定文件操作根目录；省略时使用当前启动目录。点击“打开”会弹出页面内文件浏览器，在该目录中点选文件即可打开；“新建”在该目录下创建文件并打开；“保存”写回已打开的本地文件，不是下载副本。
 
 创建桌面快捷方式（仅限Windows）
 
@@ -46,11 +48,19 @@ weditor # 启动server并打开浏览器
 weditor --shortcut
 ```
 
-更多选项通过 `weditor --help` 查看
+快捷方式会以 `python -m weditor2` 启动。也可以直接运行：
+
+```bash
+python -m weditor2
+```
+
+这会启动本地 17310 端口的服务并打开浏览器。更多选项通过 `python -m weditor2 -h` 查看。
 
 如果浏览器没有自动打开，可以手动访问 <http://localhost:17310>
 
 > 17310这个端口是为了纪念，项目的创建日期 2017/03/10
+
+旧的 `python -m server` 和 `python -m weditor` 命令仍然可用。
 
 ## 常用快捷键
 

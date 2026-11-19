@@ -131,6 +131,13 @@ ctx.refreshScreenshotFromToolbar = async function refreshScreenshotFromToolbar()
   }
 }
 
+ctx.sendToolbarKey = function sendToolbarKey(key) {
+  if (suppressToolbarClick) return
+  if (!device.deviceId.value) return ElMessage.warning('Connect first')
+  logInteraction('悬浮工具栏', '下发按键', key)
+  runScreenGesture({ action: 'keyevent', key })
+}
+
 
 }
 }

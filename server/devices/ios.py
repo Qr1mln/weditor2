@@ -47,3 +47,10 @@ class _AppleDevice(DeviceMeta):
 
     def swipe(self, x1, y1, x2, y2, duration=0.5):
         self._client.swipe(x1, y1, x2, y2)
+
+    def keyevent(self, key):
+        name = str(key).upper()
+        if name == 'HOME':
+            self._client.home()
+        else:
+            raise ValueError('unsupported keyevent on iOS: %s' % key)

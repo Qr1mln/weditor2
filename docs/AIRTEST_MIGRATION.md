@@ -523,7 +523,7 @@ server/
 tests/  docs/
 ```
 
-启动方式：`python -m server` 为主；`python -m weditor` 作为兼容入口保留（`weditor/__main__.py` 转发到 `server.__main__:main`）。安装后命令行命令 `weditor` 亦可用（`setup.cfg` 的 console_scripts 指向 `server.__main__:main`）。页面 URL 仍以 `/static/` 为前缀（Tornado `static_url_prefix` 默认值），物理目录为 `weditor/`。
+启动方式（此节记录当时的状态）：`python -m server` 为主；`python -m weditor` 作为兼容入口保留（`weditor/__main__.py` 转发到 `server.__main__:main`）。安装后命令行命令 `weditor` 亦可用（`setup.cfg` 的 console_scripts 指向 `server.__main__:main`）。页面 URL 仍以 `/static/` 为前缀（Tornado `static_url_prefix` 默认值），物理目录为 `weditor/`。当前主入口已改为 `python -m weditor2`，见第 13 节。
 
 配套改动：
 
@@ -536,4 +536,25 @@ tests/  docs/
 | `server/handlers/shell.py` | `ROOT_DIR/../ipyshell-console.py` 仍指向 `server/ipyshell-console.py`，无需改动 |
 | 文档 | `python -m weditor` → `python -m server`；`server/static/` → `weditor/` |
 
-注意：`server` 是通用顶层包名，若环境中已存在同名包可能冲突；`python -m server` 需项目根位于 `sys.path`（源码运行与 `pip install -e` 天然满足）。`weditor/` 为顶层独立目录（无 `__init__.py`），普通 `pip install` 不会自动打包它，若需随包分发前端资源需补 `package_data`/`MANIFEST.in`。
+注意：`server` 是通用顶层包名，若环境中已存在同名包可能冲突；`python -m server` 需项目根位于 `sys.path`（源码运行与 `pip install -e` 天然满足）。`weditor/` 目录既存放零构建前端静态资源，也保留了兼容入口 `__init__.py` / `__main__.py`（用于 `python -m weditor`），并已列入 `setup.cfg` 的 packages；前端静态资源是否随 wheel 分发取决于 `package_data` / `MANIFEST.in`。
+
+---
+
+## 13. 启动入口与文件模块调整（2026-11-19）
+
+### 13.1 新入口
+- 主启动命令改为 `python -m weditor2 --workspace D:\work\myproject`。
+- 新增 `weditor2/` 包，`weditor2/__main__.py` 转发到 `server.__main__:main`；旧的 `python -m server`、`python -m weditor` 和 console script `weditor` 仍可用。
+- `--workspace` 指定文件读写根目录，也可用位置参数；省略时以启动命令的工作目录为根目录。`-project` / `-d` / `--project` 曾尝试过，因与 `-p/--port` 冲突或按用户要求已移除。
+- `setup.cfg` 的 `[files] packages` 增加 `weditor2`；桌面快捷方式改为启动 `-m weditor2`；帮助信息程序名为 `weditor2`。
+
+### 13.2 文件操作改造
+- 移除前端 Explorer 目录树、File System Access API（`showDirectoryPicker` / `showOpenFilePicker`）、权限请求与句柄缓存；不再有浏览器文件夹授权弹窗。
+- 保留三个操作：打开、保存、新建。打开使用页面内文件浏览器（后端列目录、前端点选），不依赖系统窗口；新建输入项目根目录下的相对路径；保存只写回当前已打开的文件，不下载。
+- 后端在 `server/__main__.py` 提供 `/api/v1/project`、`/api/v1/files/list`（GET 列目录）、`/api/v1/files`（POST 新建）、`/api/v1/files/content`（GET 读取 / PUT 写回）。写入使用同目录临时文件 + `os.replace` 原子替换。
+- 路径校验同时存在于前后端：拒绝绝对路径、`.` / `..` 段，并通过 `os.path.commonpath` 保证不越出工作目录；非 UTF-8 文本、文件不存在、已存在等情况返回明确错误。
+- 原 `server/handlers/files.py` 及旧 workspace 路由已删除；`docs/API.md` 已同步接口说明。
+
+### 13.3 文档与验证
+- `docs/README.md`、`docs/README_ZH.md`、`docs/DEVELOP.md`、`docs/API.md` 已统一为 `python -m weditor2 --workspace ...` 写法。
+- 验证：`node --check weditor/app.js` 通过；Python 21 passed；`codegen.test.js` 11 passed；接口层验证了项目信息、读取、新建、写回、路径越界拦截；浏览器层验证了打开相对路径文件并使保存按钮启用。

@@ -31,6 +31,9 @@ class DeviceMeta(metaclass=abc.ABCMeta):
     def swipe(self, x1, y1, x2, y2, duration=0.5):
         raise NotImplementedError
 
+    def keyevent(self, key):
+        raise NotImplementedError
+
 
 def _xml_from_uiautomator(dev):
     """Run ``uiautomator dump`` through an airtest Android device and return XML text."""

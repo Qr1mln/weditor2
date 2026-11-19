@@ -32,13 +32,7 @@ window.WEditorTemplate = `      <el-container class="layout">
             </div>
             <div class="panel-title">
               Screen
-              <div class="screen-meta">
-                <span>投屏：{{ screenModeLabel }}</span>
-                <span>屏幕信息：{{ screenInfoText }}</span>
-                <span>大小：{{ displaySizeText }}</span>
-                <span>当前缩放：{{ zoomPercent }}%</span>
-                <span>坐标：{{ cursorText }}</span>
-              </div>
+              <div class="screen-meta" :title="screenMetaText">{{ screenMetaText }}</div>
             </div>
             <div class="screen-area" ref="screenAreaEl">
               <div v-if="screenImg" class="screen-frame" :style="frameStyle">
@@ -108,6 +102,7 @@ window.WEditorTemplate = `      <el-container class="layout">
                         <div class="explorer-toolbar">
                           <div class="explorer-toolbar-row">
                             <button type="button" class="explorer-toolbar-button" title="打开项目目录" @click="openProject">打开项目</button>
+                            <button type="button" class="explorer-toolbar-button" title="浏览服务端工作区文件" @click="openServerFileBrowser">服务文件</button>
                             <button type="button" class="explorer-toolbar-button primary" title="保存到工作区" @click="saveCodeFile">保存</button>
                           </div>
                           <div class="explorer-toolbar-row">
@@ -290,6 +285,30 @@ window.WEditorTemplate = `      <el-container class="layout">
           @mousedown="startToolbarDrag"
         >
           <el-button
+            class="toolbar-key"
+            size="small"
+            circle
+            aria-label="返回键"
+            title="模拟返回键 (BACK)"
+            @click="sendToolbarKey('BACK')"
+          >
+            <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M20 11H7.8l5.6-5.6L12 4l-8 8 8 8 1.4-1.4L7.8 13H20z" />
+            </svg>
+          </el-button>
+          <el-button
+            class="toolbar-key"
+            size="small"
+            circle
+            aria-label="HOME 键"
+            title="模拟 HOME 键"
+            @click="sendToolbarKey('HOME')"
+          >
+            <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 3 2 11h3v9h6v-6h2v6h6v-9h3z" />
+            </svg>
+          </el-button>
+          <el-button
             class="toolbar-refresh"
             size="small"
             circle
@@ -303,5 +322,32 @@ window.WEditorTemplate = `      <el-container class="layout">
             </svg>
           </el-button>
         </div>
+
+        <el-dialog v-model="fileBrowserVisible" title="服务端工作区文件" width="560px" class="file-browser-dialog">
+          <div class="file-browser-bar">
+            <el-button size="small" :disabled="!fileBrowserDir" @click="loadFileBrowserDir(browserParentDir(fileBrowserDir))">上级</el-button>
+            <span class="file-browser-path" :title="fileBrowserDir">{{ fileBrowserDir || '项目根目录' }}</span>
+            <el-button size="small" @click="loadFileBrowserDir(fileBrowserDir)">刷新</el-button>
+          </div>
+          <div v-loading="fileBrowserLoading" class="file-browser-list">
+            <div
+              v-for="entry in fileBrowserEntries"
+              :key="entry.path"
+              class="file-browser-item"
+              :title="entry.path"
+              @click="onFileBrowserEntryClick(entry)"
+            >
+              <span class="file-browser-icon" :class="entry.type === 'dir' ? 'folder' : 'file'">
+                {{ entry.type === 'dir' ? '目录' : '文件' }}
+              </span>
+              <span class="file-browser-name">{{ entry.name }}</span>
+            </div>
+            <div v-if="!fileBrowserEntries.length && !fileBrowserLoading" class="placeholder">当前目录为空</div>
+          </div>
+          <p v-if="fileBrowserError" class="file-browser-error">{{ fileBrowserError }}</p>
+          <template #footer>
+            <el-button size="small" @click="fileBrowserVisible = false">取消</el-button>
+          </template>
+        </el-dialog>
       </el-container>
 `

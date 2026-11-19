@@ -141,7 +141,11 @@ class ProjectHandler(WorkspaceBaseHandler):
     """Get or change the local project directory shown by the explorer."""
 
     def get(self):
-        self.write({'success': True, 'root': workspace_root})
+        self.write({
+            'success': True,
+            'root': workspace_root,
+            'name': os.path.basename(os.path.normpath(workspace_root)) or workspace_root,
+        })
 
     def post(self):
         try:
@@ -235,6 +239,46 @@ class WorkspaceFilesHandler(WorkspaceBaseHandler):
             self.fail(e)
 
 
+class WorkspaceListHandler(WorkspaceBaseHandler):
+    """List one directory level for the lightweight file browser."""
+
+    def get(self):
+        try:
+            ensure_workspace()
+            relative = self.get_query_argument('dir', '').strip().replace('\\', '/')
+            path = workspace_root if not relative else resolve_workspace_path(relative)
+            root_norm = os.path.normcase(os.path.realpath(workspace_root))
+            real_path = os.path.normcase(os.path.realpath(path))
+            if os.path.commonpath([root_norm, real_path]) != root_norm:
+                raise ValueError('path outside workspace')
+            if not os.path.isdir(path):
+                raise NotADirectoryError('not a directory')
+            entries = []
+            with os.scandir(path) as items:
+                for item in items:
+                    if item.is_symlink():
+                        continue
+                    if item.is_dir(follow_symlinks=False):
+                        kind = 'dir'
+                    elif item.is_file(follow_symlinks=False):
+                        kind = 'file'
+                    else:
+                        continue
+                    entries.append({
+                        'name': item.name,
+                        'path': display_relative(item.path),
+                        'type': kind,
+                    })
+            entries.sort(key=lambda entry: (entry['type'] != 'dir', entry['name'].lower()))
+            self.write({
+                'success': True,
+                'dir': display_relative(path),
+                'entries': entries,
+            })
+        except Exception as e:
+            self.fail(e)
+
+
 class WorkspaceContentHandler(WorkspaceBaseHandler):
     """Read/write UTF-8 text files inside the local workspace."""
 
@@ -249,6 +293,7 @@ class WorkspaceContentHandler(WorkspaceBaseHandler):
             self.write({
                 'success': True,
                 'path': display_relative(path),
+                'name': os.path.basename(path),
                 'content': content,
                 'encoding': 'utf-8',
             })

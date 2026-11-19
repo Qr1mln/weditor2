@@ -61,6 +61,9 @@ class _AndroidAirTestDevice(DeviceMeta):
     def swipe(self, x1, y1, x2, y2, duration=0.5):
         self._d.swipe((x1, y1), (x2, y2), duration=duration)
 
+    def keyevent(self, key):
+        self._d.keyevent(key)
+
 
 class _AndroidADB(DeviceMeta):
     """Android ADB-only device, using airtest's bundled ADB instead of adbutils."""
@@ -110,3 +113,6 @@ class _AndroidADB(DeviceMeta):
 
     def swipe(self, x1, y1, x2, y2, duration=0.5):
         self._d.swipe((x1, y1), (x2, y2), duration=duration)
+
+    def keyevent(self, key):
+        self._d.keyevent(key)

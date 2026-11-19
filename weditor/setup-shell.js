@@ -88,6 +88,7 @@ ctx.shellRestart = function shellRestart() {
 }
 
 ctx.ElMessage = window.ElementPlus.ElMessage
+ctx.ElMessageBox = window.ElementPlus.ElMessageBox
 
 
 }

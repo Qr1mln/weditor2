@@ -4,20 +4,6 @@ window.WEditorSetupModules = window.WEditorSetupModules || {}
 window.WEditorSetupModules.installCoding = function (ctx) {
 
 with (ctx) {
-ctx.insertAtCursor = function insertAtCursor(text) {
-  if (!monacoEditor) {
-    editor.code.value += text
-    return false
-  }
-  monacoEditor.executeEdits('weditor-screen-touch', [{
-    range: monacoEditor.getSelection(),
-    text,
-    forceMoveMarkers: true,
-  }])
-  monacoEditor.focus()
-  return true
-}
-
 ctx.insertSnippet = function insertSnippet(code) {
   if (!monacoEditor) {
     const current = editor.code.value
