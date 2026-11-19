@@ -11,6 +11,54 @@
   const SCREEN_MODE_KEY = 'weditor.screenMode'
   const ACTIONS_COLLAPSED_KEY = 'weditor.actionsCollapsed'
   const ACTION_GROUP_LABELS = { action: '交互操作', assert: '等待与断言', utility: '辅助工具' }
+  const CONSOLE_LEVELS_KEY = 'weditor.consoleLevels'
+  const LOG_LEVELS = [
+    { key: 'debug', label: 'DEBUG' },
+    { key: 'info', label: 'INFO' },
+    { key: 'warning', label: 'WARNING' },
+    { key: 'error', label: 'ERROR' },
+  ]
+  const LOG_LEVEL_ALIASES = {
+    debug: 'debug', trace: 'debug',
+    info: 'info', notice: 'info',
+    warn: 'warning', warning: 'warning',
+    error: 'error', err: 'error', critical: 'error', fatal: 'error',
+  }
+
+  function defaultConsoleLevels() {
+    return LOG_LEVELS.map(l => l.key)
+  }
+
+  function loadConsoleLevels() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(CONSOLE_LEVELS_KEY) || 'null')
+      if (Array.isArray(saved)) return saved.filter(k => LOG_LEVELS.some(l => l.key === k))
+    } catch (e) {}
+    return defaultConsoleLevels()
+  }
+
+  function saveConsoleLevels(levels) {
+    try { localStorage.setItem(CONSOLE_LEVELS_KEY, JSON.stringify(levels)) } catch (e) {}
+  }
+
+  function normalizeLogLevel(level) {
+    return LOG_LEVEL_ALIASES[String(level || '').toLowerCase()] || null
+  }
+
+  function inferLogLevel(text) {
+    const s = String(text || '')
+    if (/traceback \(most recent call last\)|\[(?:critical|fatal|error)\]/i.test(s)) return 'error'
+    if (/\[(?:warn|warning)\]/i.test(s)) return 'warning'
+    if (/\[debug\]/i.test(s)) return 'debug'
+    return 'info'
+  }
+
+  function resolveLogLevel(level, text) {
+    const normalized = normalizeLogLevel(level)
+    // stdout defaults to info; explicit markers in the text should still win
+    if (normalized === 'info') return inferLogLevel(text)
+    return normalized || inferLogLevel(text)
+  }
 
   const CODING_ACTIONS = [
     {
@@ -152,6 +200,10 @@
       const splitterActive = ref(false)
       const consoleHeight = ref(loadConsoleHeight() + 'px')
       const consoleSplitterActive = ref(false)
+      const consoleLevels = ref(loadConsoleLevels())
+      const visibleConsoleOutput = computed(() =>
+        shell.output.value.filter(o => consoleLevels.value.includes(o.level)))
+      watch(consoleLevels, v => saveConsoleLevels(v), { deep: true })
       const deviceCoordinateSize = ref(null)
       const screenshotSize = ref(null)
       const displaySize = ref(null)
@@ -697,6 +749,17 @@
         document.addEventListener('mouseup', stopConsoleResize)
       }
 
+      function toggleConsoleLevel(key, event) {
+        const enabled = new Set(consoleLevels.value)
+        if (event.target.checked) enabled.add(key)
+        else enabled.delete(key)
+        consoleLevels.value = LOG_LEVELS.filter(l => enabled.has(l.key)).map(l => l.key)
+      }
+
+      function resetConsoleSettings() {
+        consoleLevels.value = defaultConsoleLevels()
+      }
+
       function clampToolbarPosition(x, y) {
         const el = toolbarEl.value
         const maxX = Math.max(0, window.innerWidth - (el ? el.offsetWidth : 0))
@@ -789,7 +852,10 @@
           console.log('[ws] recv', ev.data)
           try {
             const msg = JSON.parse(ev.data)
-            if (msg.method === 'output') shell.output.value.push({ value: msg.value })
+            if (msg.method === 'output') {
+              const level = resolveLogLevel(msg.level, msg.value)
+              shell.output.value.push({ value: msg.value, level })
+            }
             else if (msg.method === 'finish') shell.running.value = false
             else if (msg.method === 'restarted') shell.restarting.value = false
             else if (msg.method === 'gotoLine') shell.lastLineno.value = msg.value
@@ -1495,6 +1561,7 @@
         version, device, shell, editor, screenImg, selectedNode, selectedInfo,
         hierarchyTree, codeContainer, treeLabel, screenAreaEl, screenImgEl,
         screenPaneWidth, splitterActive, consoleHeight, consoleSplitterActive,
+        consoleLevels, visibleConsoleOutput, LOG_LEVELS,
         frameStyle, rightTab, codingMode, activeMode, templateRect,
         codeWorkspaceEl, actionsCollapsed, actionsCompact, activeSnippet,
         pendingCoordHint, coordHintText, pendingTemplateFill, templateHintText,
@@ -1509,6 +1576,7 @@
         startToolbarDrag, refreshScreenshotFromToolbar, toggleScreenMode,
         onScreenMouseDown, onScreenMouseMove, onScreenMouseLeave,
         runCode, runSelected, runCurrentLine, shellInterrupt, shellRestart,
+        toggleConsoleLevel, resetConsoleSettings,
         useAction, toggleActions, actionGroupName,
         genClearCode: C.genClearCode,
       }
@@ -1722,7 +1790,31 @@
               ></div>
               <div class="console-panel" :style="{ height: consoleHeight }">
                 <div class="panel-title">Console</div>
-                <pre class="console">{{ shell.output.value.map(o => o.value).join('') }}</pre>
+                <div class="console-toolbar">
+                  <label
+                    v-for="lv in LOG_LEVELS"
+                    :key="'filter-' + lv.key"
+                    class="console-level-chip"
+                    :class="{ off: !consoleLevels.includes(lv.key) }"
+                    :title="'显示/隐藏 ' + lv.label + ' 日志'"
+                  >
+                    <input
+                      type="checkbox"
+                      :checked="consoleLevels.includes(lv.key)"
+                      @change="toggleConsoleLevel(lv.key, $event)"
+                    />
+                    <span>{{ lv.label }}</span>
+                  </label>
+                  <button type="button" class="console-reset" title="重置级别过滤" @click="resetConsoleSettings">重置</button>
+                </div>
+                <div class="console">
+                  <span
+                    v-for="(line, i) in visibleConsoleOutput"
+                    :key="i"
+                    class="console-line"
+                    :class="'log-' + line.level"
+                  >{{ line.value }}</span>
+                </div>
               </div>
             </div>
           </el-aside>

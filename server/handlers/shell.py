@@ -141,10 +141,18 @@ class PythonShellHandler(tornado.websocket.WebSocketHandler):
                     logger.debug("DBG: %s", value)
                     # self.write2({"method": "output", "value": "- "+value})
                 elif cmdx == "WRT":
-                    # here value is json_encoded string
+                    # value is json_encoded: {"level": "...", "value": "..."}
+                    # older subprocesses may send a plain json string
+                    payload = json.loads(value)
+                    if isinstance(payload, dict):
+                        text = payload.get("value", "")
+                        level = payload.get("level") or "info"
+                    else:
+                        text, level = payload, "info"
                     self.write2({
                         "method": "output",
-                        "value": json.loads(value)
+                        "value": text,
+                        "level": level,
                     })
                 elif cmdx == "EOF":
                     logger.debug(

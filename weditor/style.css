@@ -258,7 +258,64 @@ html, body, body *, body *::before, body *::after {
   background: #fff;
 }
 .console-panel .panel-title { margin-bottom: 6px; }
-.console { flex: 1; min-height: 0; height: auto; font-size: 12px; overflow: auto; background: #1e1e1e; color: #d4d4d4; padding: 8px; margin: 0; }
+.console-toolbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin-bottom: 6px;
+  font-size: 11px;
+  color: #666;
+}
+.console-level-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 4px;
+  border: 1px solid #409eff;
+  border-radius: 3px;
+  background: #e8f2fc;
+  color: #1a5fa8;
+  cursor: pointer;
+  user-select: none;
+}
+.console-level-chip.off {
+  opacity: .6;
+  background: #fff;
+  border-color: #d0d0d0;
+  color: #666;
+}
+.console-level-chip input { margin: 0; width: 12px; height: 12px; cursor: pointer; }
+.console-reset {
+  margin-left: auto;
+  padding: 1px 6px;
+  border: 1px solid #d0d0d0;
+  border-radius: 3px;
+  background: #fff;
+  color: #666;
+  font-size: 11px;
+  cursor: pointer;
+}
+.console-reset:hover { background: #f0f0f0; color: #333; }
+.console {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+  font-family: Consolas, Monaco, monospace;
+  font-size: 12px;
+  overflow: auto;
+  background: #1e1e1e;
+  color: #d4d4d4;
+  padding: 8px;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.console-line.log-debug { color: #ffffff; }
+.console-line.log-info { color: #4caf50; }
+.console-line.log-warning { color: #ffa726; }
+.console-line.log-error { color: #f44336; }
 .resource-toolbar { flex: none; }
 .asset-grid {
   flex: 1;

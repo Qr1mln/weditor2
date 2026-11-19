@@ -1,6 +1,6 @@
 # coding: utf-8
 #
-# WRT:{quoted output string}
+# WRT:{"level": "...", "value": "..."} 输出，level 为 debug/info/warning/error
 # EOF:{running milliseconds} 结束标记
 # DBG:{debug string}
 # LNO:{line number} # 从0开始
@@ -10,13 +10,14 @@
 # >>> print("hello", end="")
 # LNO:0
 # DBG:  0 print("hello", end="")
-# WRT:"hello"
+# WRT:{"level": "info", "value": "hello"}
 # EOF:1
 
 import base64
 import contextlib
 import linecache
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -85,27 +86,58 @@ class QuitError(Exception):
     """ quit for this program """
 
 
+def write_output(stream, data: str, level: str = "info", prefix: str = "WRT:"):
+    """Emit one console chunk tagged with a log level."""
+    if not data:
+        return
+    stream.write(prefix + json.dumps({"level": level, "value": data}) + "\n")
+    stream.flush()
+
+
+class ConsoleLogHandler(logging.Handler):
+    """Forward logging records to the console using the record's own level."""
+    _LEVELS = ("debug", "info", "warning", "error", "critical")
+
+    def __init__(self, stream):
+        super().__init__()
+        self.stream = stream
+
+    def emit(self, record):
+        try:
+            level = record.levelname.lower()
+            if level not in self._LEVELS:
+                level = "info"
+            write_output(self.stream, self.format(record) + "\n", level)
+        except Exception:
+            self.handleError(record)
+
+
 @contextlib.contextmanager
 def mock_stdout_stderr(prefix="WRT:"):
     _stdout = sys.stdout
     _stderr = sys.stderr
     try:
 
-        class MockStdout:
+        class MockStream:
+            def __init__(self, level: str):
+                self.level = level
+
             def isatty(self) -> bool:
                 return False
 
             def write(self, data: str):
                 try:
-                    if data != "":
-                        _stdout.write(prefix + json.dumps(data) + "\n")
-                        _stdout.flush()
+                    write_output(_stdout, data, self.level, prefix)
                 except Exception as e:
                     raise QuitError("Output exception", str(e))
+
             def flush(self):
                 _stdout.flush()
-        sys.stdout = sys.stderr = MockStdout()
-        yield _stdout, _stderr  # lambda s: _stdout.write(s+"\n")
+
+        # stdout is regular info, stderr carries errors and warnings
+        sys.stdout = MockStream("info")
+        sys.stderr = MockStream("error")
+        yield _stdout, _stderr
     finally:
         sys.stdout = _stdout
         sys.stderr = _stderr
@@ -158,6 +190,22 @@ def main():
         # preload airtest into the REPL global namespace
         import airtest
         import airtest.core.api as _atapi
+        # airtest.core.api installs a StreamHandler on sys.stderr at import time,
+        # which is our "error" stream here; replace it so every record keeps
+        # its own level instead of being reported as an error
+        airtest_logger = logging.getLogger("airtest")
+        _old_handlers = list(airtest_logger.handlers)
+        _formatter = _old_handlers[0].formatter if _old_handlers else None
+        if _formatter is None:
+            _formatter = logging.Formatter(
+                fmt='[%(asctime)s][%(levelname)s]<%(name)s> %(message)s',
+                datefmt='%H:%M:%S')
+        for _handler in _old_handlers:
+            airtest_logger.removeHandler(_handler)
+        _console_handler = ConsoleLogHandler(stdout)
+        _console_handler.setFormatter(_formatter)
+        airtest_logger.addHandler(_console_handler)
+        airtest_logger.propagate = False
         _globals['airtest'] = airtest
         _globals['input_text'] = input_text
         for _name in ('connect_device', 'device', 'snapshot', 'touch',
@@ -192,22 +240,21 @@ def main():
                     break
                 sigint_twice = True
                 if start:
-                    stdout.write(
-                        "WRT:" +
-                        json.dumps(">>> Catch Signal KeyboardInterrupt\n"))
-                    stdout.write("\n")
-                # stdout.write("INFO:KeyboardInterrupt catched, twice quit\n")
+                    write_output(stdout,
+                                 ">>> Catch Signal KeyboardInterrupt\n",
+                                 "warning")
             except QuitError as e:
                 stdout.write("DBG:{!r}".format(e))
                 # Read error from stdin
                 stdout.write("QUIT\n")
                 break
             except:
-                # Show traceback
+                # Show traceback as error level
                 # https://docs.python.org/3/library/traceback.html
                 flines = traceback.format_exc().splitlines(keepends=True)
-                print(flines[0] +
-                      "".join(flines[5:]).rstrip())  # ignore top 2 stack-frame
+                write_output(stdout,
+                             flines[0] + "".join(flines[5:]).rstrip(),
+                             "error")  # ignore top 2 stack-frame
             finally:
                 # Code block finished running
                 millis = 0 if start is None else (time.time() - start) * 1000
