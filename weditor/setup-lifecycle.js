@@ -18,7 +18,8 @@ watch(rightTab, (tab) => {
 
 onMounted(async () => {
   fetchVersion()
-  loadWorkspaceTree()
+  loadProjectInfo()
+  loadServerTree()
   await nextTick()
   toolbarPos.value = clampToolbarPosition(toolbarPos.value.x, toolbarPos.value.y)
   const main = getMainElement()
@@ -44,6 +45,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   stopSplitResize()
   stopConsoleResize()
+  stopExplorerResize()
   stopToolbarDrag()
   closeMinicap()
   removeGestureListeners()

@@ -8,6 +8,7 @@
   const ACTIONS_COLLAPSED_KEY = 'weditor.actionsCollapsed'
   const ACTION_GROUP_LABELS = { action: '交互操作', assert: '等待与断言', utility: '辅助工具' }
   const CONSOLE_LEVELS_KEY = 'weditor.consoleLevels'
+  const EXPLORER_WIDTH_KEY = 'weditor.explorerWidth'
   const LOG_LEVELS = [
     { key: 'debug', label: 'DEBUG' },
     { key: 'info', label: 'INFO' },
@@ -83,6 +84,7 @@
   window.WEditorConstants = {
     SPLIT_RATIO_KEY, CONSOLE_HEIGHT_KEY, TOOLBAR_POS_KEY, SCREEN_MODE_KEY,
     ACTIONS_COLLAPSED_KEY, ACTION_GROUP_LABELS, CONSOLE_LEVELS_KEY,
+    EXPLORER_WIDTH_KEY,
     LOG_LEVELS, LOG_LEVEL_ALIASES, CODING_ACTIONS,
   }
 })()

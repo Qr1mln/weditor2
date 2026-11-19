@@ -1,5 +1,6 @@
 /* WEditor setup module: splitters + drag */
 (function () {
+let explorerResizing = false
 window.WEditorSetupModules = window.WEditorSetupModules || {}
 window.WEditorSetupModules.installLayout = function (ctx) {
 
@@ -53,6 +54,39 @@ ctx.startSplitResize = function startSplitResize(e) {
 
 ctx.getWorkspaceElement = function getWorkspaceElement() {
   return document.querySelector('.code-workspace')
+}
+
+ctx.resizeExplorer = function resizeExplorer(e) {
+  const body = document.querySelector('.coding-body')
+  if (!body) return
+  const rect = body.getBoundingClientRect()
+  const maxWidth = Math.max(140, rect.width - 300)
+  const width = Math.min(Math.max(e.clientX - rect.left, 140), maxWidth)
+  explorerWidth.value = Math.round(width) + 'px'
+  nextTick(() => { if (monacoEditor) monacoEditor.layout() })
+}
+
+ctx.stopExplorerResize = function stopExplorerResize() {
+  if (!explorerResizing) return
+  explorerResizing = false
+  explorerSplitterActive.value = false
+  document.body.style.userSelect = ''
+  document.removeEventListener('mousemove', resizeExplorer)
+  document.removeEventListener('mouseup', stopExplorerResize)
+  window.removeEventListener('blur', stopExplorerResize)
+  saveExplorerWidth(Number.parseFloat(explorerWidth.value) || 220)
+  nextTick(() => { if (monacoEditor) monacoEditor.layout() })
+}
+
+ctx.startExplorerResize = function startExplorerResize(e) {
+  if (explorerResizing || (e.button != null && e.button !== 0)) return
+  e.preventDefault()
+  explorerResizing = true
+  explorerSplitterActive.value = true
+  document.body.style.userSelect = 'none'
+  document.addEventListener('mousemove', resizeExplorer)
+  document.addEventListener('mouseup', stopExplorerResize)
+  window.addEventListener('blur', stopExplorerResize)
 }
 
 ctx.clampConsoleHeight = function clampConsoleHeight(height, rect) {

@@ -16,6 +16,7 @@ with (ctx) {
     TOOLBAR_POS_KEY: K.TOOLBAR_POS_KEY, SCREEN_MODE_KEY: K.SCREEN_MODE_KEY,
     ACTIONS_COLLAPSED_KEY: K.ACTIONS_COLLAPSED_KEY,
     ACTION_GROUP_LABELS: K.ACTION_GROUP_LABELS, CONSOLE_LEVELS_KEY: K.CONSOLE_LEVELS_KEY,
+    EXPLORER_WIDTH_KEY: K.EXPLORER_WIDTH_KEY,
     LOG_LEVELS: K.LOG_LEVELS, LOG_LEVEL_ALIASES: K.LOG_LEVEL_ALIASES,
     CODING_ACTIONS: K.CODING_ACTIONS,
     defaultConsoleLevels: P.defaultConsoleLevels, loadConsoleLevels: P.loadConsoleLevels,
@@ -23,6 +24,7 @@ with (ctx) {
     inferLogLevel: P.inferLogLevel, resolveLogLevel: P.resolveLogLevel,
     loadScreenMode: P.loadScreenMode, saveScreenMode: P.saveScreenMode,
     loadSplitRatio: P.loadSplitRatio, loadConsoleHeight: P.loadConsoleHeight,
+    loadExplorerWidth: P.loadExplorerWidth, saveExplorerWidth: P.saveExplorerWidth,
     loadToolbarPosition: P.loadToolbarPosition, saveToolbarPosition: P.saveToolbarPosition,
   })
 ctx.version = ref('...')
@@ -52,6 +54,8 @@ ctx.rightTab = ref('coding')
 ctx.codingMode = ref(false) // false=操作, true=编程
 ctx.codeWorkspaceEl = ref(null)
 ctx.workspaceWidth = ref(0)
+ctx.explorerWidth = ref(loadExplorerWidth() + 'px')
+ctx.explorerSplitterActive = ref(false)
 ctx.actionsCollapsed = ref(localStorage.getItem(ACTIONS_COLLAPSED_KEY) === '1')
 ctx.actionsCompact = computed(() => actionsCollapsed.value
   || (workspaceWidth.value > 0 && workspaceWidth.value < 560))
@@ -113,6 +117,7 @@ ctx.fileDirty = ref(false)
 ctx.fileTreeData = ref([])
 ctx.selectedFileNode = ref(null)
 ctx.currentFilePath = ref('')
+ctx.fileSource = ref('server')
 ctx.workspaceLoading = ref(false)
 ctx.projectPath = ref('')
 ctx.projectLabel = computed(() => {
@@ -157,11 +162,9 @@ ctx.screenMetaText = computed(() => {
   parts.push(zoomPercent.value + '%', '坐标 ' + cursorText.value)
   return parts.join(' · ')
 })
-ctx.fileBrowserVisible = ref(false)
-ctx.fileBrowserDir = ref('')
-ctx.fileBrowserEntries = ref([])
-ctx.fileBrowserLoading = ref(false)
-ctx.fileBrowserError = ref('')
+ctx.explorerMenu = ref({ visible: false, x: 0, y: 0, node: null })
+ctx.explorerTreeRef = ref(null)
+ctx.expandedDirKeys = ref([])
 
 
 }

@@ -4,6 +4,7 @@
   const {
     CONSOLE_LEVELS_KEY, SCREEN_MODE_KEY, SPLIT_RATIO_KEY,
     CONSOLE_HEIGHT_KEY, TOOLBAR_POS_KEY, LOG_LEVELS, LOG_LEVEL_ALIASES,
+    EXPLORER_WIDTH_KEY,
   } = window.WEditorConstants
   function defaultConsoleLevels() {
     return LOG_LEVELS.map(l => l.key)
@@ -60,6 +61,17 @@
     return Number.isFinite(saved) && saved >= 80 && saved <= 2000 ? saved : 180
   }
 
+  function loadExplorerWidth() {
+    const saved = Number.parseFloat(localStorage.getItem(EXPLORER_WIDTH_KEY))
+    return Number.isFinite(saved) && saved >= 140 && saved <= 520 ? saved : 220
+  }
+
+  function saveExplorerWidth(width) {
+    try {
+      localStorage.setItem(EXPLORER_WIDTH_KEY, String(Math.round(width)))
+    } catch (e) {}
+  }
+
   function loadToolbarPosition() {
     try {
       const saved = JSON.parse(localStorage.getItem(TOOLBAR_POS_KEY) || 'null')
@@ -84,6 +96,6 @@
     defaultConsoleLevels, loadConsoleLevels, saveConsoleLevels,
     normalizeLogLevel, inferLogLevel, resolveLogLevel,
     loadScreenMode, saveScreenMode, loadSplitRatio, loadConsoleHeight,
-    loadToolbarPosition, saveToolbarPosition,
+    loadExplorerWidth, saveExplorerWidth, loadToolbarPosition, saveToolbarPosition,
   }
 })()

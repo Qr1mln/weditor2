@@ -93,7 +93,7 @@ window.WEditorTemplate = `      <el-container class="layout">
                     <span v-else-if="pendingTemplateFill" class="coord-fill-hint">{{ templateHintText }}</span>
                   </div>
                   <div class="coding-body">
-                    <div class="coding-explorer" aria-label="Explorer">
+                    <div class="coding-explorer" aria-label="Explorer" :style="{ width: explorerWidth }">
                       <div class="explorer-panel">
                         <div class="explorer-title">
                           <span :title="projectPath || 'Explorer'">{{ projectLabel }}</span>
@@ -101,29 +101,24 @@ window.WEditorTemplate = `      <el-container class="layout">
                         </div>
                         <div class="explorer-toolbar">
                           <div class="explorer-toolbar-row">
-                            <button type="button" class="explorer-toolbar-button" title="打开项目目录" @click="openProject">打开项目</button>
-                            <button type="button" class="explorer-toolbar-button" title="浏览服务端工作区文件" @click="openServerFileBrowser">服务文件</button>
                             <button type="button" class="explorer-toolbar-button primary" title="保存到工作区" @click="saveCodeFile">保存</button>
                           </div>
-                          <div class="explorer-toolbar-row">
-                            <button type="button" class="explorer-toolbar-button" title="新建文件" @click="createWorkspaceEntry('file')">新建</button>
-                            <button type="button" class="explorer-toolbar-button" title="新建目录" @click="createWorkspaceEntry('dir')">目录</button>
-                            <button type="button" class="explorer-toolbar-button" title="重命名" @click="renameWorkspaceEntry">改名</button>
-                            <button type="button" class="explorer-toolbar-button danger" title="删除" @click="deleteWorkspaceEntry">删除</button>
-                          </div>
                         </div>
-                        <div class="explorer-tree">
+                        <div class="explorer-tree" @contextmenu.prevent="onExplorerBackgroundContextMenu($event)">
                           <el-tree
+                            ref="explorerTreeRef"
                             v-loading="workspaceLoading"
                             :data="fileTreeData"
                             node-key="path"
                             :props="{ children: 'children', label: 'name', isLeaf: 'leaf' }"
                             highlight-current
-                            :default-expand-all="true"
+                            :default-expanded-keys="expandedDirKeys"
                             @node-click="onFileTreeNodeClick"
+                            @node-expand="onTreeNodeExpand"
+                            @node-collapse="onTreeNodeCollapse"
                           >
                             <template #default="{ node, data }">
-                              <span class="explorer-tree-node" :title="data.path">
+                              <span class="explorer-tree-node" :title="data.path" @contextmenu.stop.prevent="onExplorerContextMenu($event, data)">
                                 <span class="explorer-tree-icon" :class="data.type === 'dir' ? 'folder-icon' : 'python-icon'">
                                   <svg v-if="data.type === 'dir'" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 5h7l2 2h11v12H2V5zm2 2v10h16V9H9.41L7.41 7H4z"/></svg>
                                   <svg v-else viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h8l4 4v16H6V2zm2 2v16h8V7h-3V4H8zm2 3h3v3h-3V7zm0 5h5v2h-5v-2zm0 4h5v2h-5v-2z"/></svg>
@@ -136,6 +131,12 @@ window.WEditorTemplate = `      <el-container class="layout">
                         </div>
                       </div>
                     </div>
+                    <div
+                      class="splitter"
+                      :class="{ active: explorerSplitterActive }"
+                      title="拖拽调整文件管理宽度"
+                      @mousedown="startExplorerResize"
+                    ></div>
                     <div class="coding-editor-area">
                       <div class="coding-actions" :class="{ compact: actionsCompact }">
                       <el-tooltip
@@ -323,31 +324,12 @@ window.WEditorTemplate = `      <el-container class="layout">
           </el-button>
         </div>
 
-        <el-dialog v-model="fileBrowserVisible" title="服务端工作区文件" width="560px" class="file-browser-dialog">
-          <div class="file-browser-bar">
-            <el-button size="small" :disabled="!fileBrowserDir" @click="loadFileBrowserDir(browserParentDir(fileBrowserDir))">上级</el-button>
-            <span class="file-browser-path" :title="fileBrowserDir">{{ fileBrowserDir || '项目根目录' }}</span>
-            <el-button size="small" @click="loadFileBrowserDir(fileBrowserDir)">刷新</el-button>
-          </div>
-          <div v-loading="fileBrowserLoading" class="file-browser-list">
-            <div
-              v-for="entry in fileBrowserEntries"
-              :key="entry.path"
-              class="file-browser-item"
-              :title="entry.path"
-              @click="onFileBrowserEntryClick(entry)"
-            >
-              <span class="file-browser-icon" :class="entry.type === 'dir' ? 'folder' : 'file'">
-                {{ entry.type === 'dir' ? '目录' : '文件' }}
-              </span>
-              <span class="file-browser-name">{{ entry.name }}</span>
-            </div>
-            <div v-if="!fileBrowserEntries.length && !fileBrowserLoading" class="placeholder">当前目录为空</div>
-          </div>
-          <p v-if="fileBrowserError" class="file-browser-error">{{ fileBrowserError }}</p>
-          <template #footer>
-            <el-button size="small" @click="fileBrowserVisible = false">取消</el-button>
-          </template>
-        </el-dialog>
+        <div v-if="explorerMenu.visible" class="context-menu-backdrop" @click="closeExplorerMenu" @contextmenu.prevent="closeExplorerMenu"></div>
+        <div v-if="explorerMenu.visible" class="explorer-context-menu" :style="{ left: explorerMenu.x + 'px', top: explorerMenu.y + 'px' }">
+          <button type="button" @click="contextNewFile">新建文件</button>
+          <button type="button" @click="contextNewDir">新建目录</button>
+          <button type="button" @click="contextRename">重命名</button>
+          <button type="button" class="danger" @click="contextDelete">删除</button>
+        </div>
       </el-container>
 `
