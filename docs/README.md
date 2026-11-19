@@ -36,24 +36,35 @@ pip3 install -e weditor
 ```
 
 ## Usage
+Start the server with the module entry and an optional workspace folder:
+
+```
+python -m weditor2 --workspace D:\work\myproject
+```
+
+`--workspace` sets the root folder for file operations. Omit it to use the
+current working directory. The editor's 打开 / 保存 / 新建 actions work with
+relative paths under this folder; 保存 writes back to the already-opened local
+file (it never downloads a copy).
+
 Create Shortcut in Desktop (Only windows)
 
 ```
 weditor --shortcut
 ```
 
-By click shortcut or run in command line
+The shortcut launches `python -m weditor2`. You can also start directly with:
 
 ```
-weditor
+python -m weditor2
 ```
 
-This command will start a local server with port 17310,
-and then open a browser tab for you to editor you code.
+This starts a local server on port 17310 and opens a browser tab for editing.
+Port 17310 memorizes the created day -- 2017/03/10.
 
-Port 17310 is to memorize the created day -- 2017/03/10
+To see more usage run `python -m weditor2 -h`.
 
-To see more usage run `weditor -h`
+The older `python -m server` and `python -m weditor` commands still work.
 
 ## Hotkeys(Both Mac and Win)
 - Right click screen: `Dump Hierarchy`
