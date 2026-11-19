@@ -954,7 +954,9 @@
             ElMessage.warning('Screenshot failed: ' + e.message)
           }
           shellRun(C.genPreloadCode(data.deviceId))
-          if (editor.code.value === '') setCode(C.genClearCode())
+          if (editor.code.value === '') {
+            setCode(C.genClearCode(device.platform.value, device.serial.value))
+          }
         } catch (e) {
           ElMessage.error('Connect failed: ' + e.message)
         } finally {
@@ -1324,7 +1326,7 @@
           require.config({ paths: { vs: '/static/vendor/monaco/vs' } })
           require(['vs/editor/editor.main'], function (monaco) {
             monacoEditor = monaco.editor.create(codeContainer.value, {
-              value: editor.code.value || C.genClearCode(),
+              value: editor.code.value || C.genClearCode(device.platform.value, device.serial.value),
               language: 'python',
               theme: 'vs-dark',
               automaticLayout: true,

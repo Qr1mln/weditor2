@@ -43,7 +43,11 @@ test('CJK input uses input_text (ADB_INPUT_B64) instead of text()', () => {
 })
 
 test('editor template and python wrapper', () => {
-  assert.ok(C.genClearCode().includes('from airtest.core.api import *'))
+  const android = C.genClearCode('Android', 'emulator-5554')
+  assert.ok(android.includes('from airtest.core.api import *'))
+  assert.ok(android.includes('connect_device("Android:///emulator-5554")'))
+  assert.ok(android.includes('log("hello world")'))
+  assert.ok(C.genClearCode('iOS', '0000').includes('wda.Client()'))
   assert.ok(C.genPythonCode('touch((1, 2))').endsWith('touch((1, 2))'))
 })
 

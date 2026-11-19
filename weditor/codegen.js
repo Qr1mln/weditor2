@@ -52,14 +52,33 @@
     return Array(clearCount).fill('keyevent("KEYCODE_DEL")').join('\n')
   }
 
-  function genClearCode() {
+  function connectLines(platform, deviceUrl) {
+    const url = String(deviceUrl || '')
+    if (platform === 'iOS' || platform === 'ios') {
+      return [
+        'from airtest.core.api import *',
+        'import os',
+        'import wda',
+        '',
+        `os.environ['DEVICE_URL'] = "${url}"`,
+        'c = d = wda.Client()',
+      ]
+    }
     return [
-      '# coding: utf-8',
-      '#',
       'from airtest.core.api import *',
       '',
+      `connect_device("Android:///${url}")`,
       'd = device()',
+    ]
+  }
+
+  function genClearCode(platform = 'Android', deviceUrl = '') {
+    return [
+      '# coding: utf-8',
       '',
+      ...connectLines(platform, deviceUrl),
+      '',
+      'log("hello world")',
       '',
     ].join('\n')
   }
@@ -69,24 +88,14 @@
     if (!m) return 'print("Unsupported deviceId: ' + deviceId + '")'
     const prefix = m[1]
     const deviceUrl = m[2]
-    if (prefix === 'ios') {
-      return [
-        "print('Set environment for iOS device\\nInit c = d = wda.Client()')",
-        'import os',
-        'import wda',
-        `os.environ['DEVICE_URL'] = "${deviceUrl}"`,
-        'c = d = wda.Client()',
-      ].join('\n')
-    }
-    if (prefix === 'android' || prefix === 'androidadb') {
-      return [
-        "print('Set environment and prepare airtest device')",
-        'from airtest.core.api import *',
-        `connect_device("Android:///${deviceUrl}")`,
-        'd = device()',
-      ].join('\n')
-    }
-    return `print("Unsupported deviceId: ${deviceId}")`
+    const platform = prefix === 'ios' ? 'iOS'
+      : prefix === 'androidadb' ? 'AndroidADB'
+        : prefix === 'android' ? 'Android' : null
+    if (!platform) return `print("Unsupported deviceId: ${deviceId}")`
+    return [
+      "log('Set environment and prepare airtest device')",
+      ...connectLines(platform, deviceUrl),
+    ].join('\n')
   }
 
   function genPythonCode(code) {
