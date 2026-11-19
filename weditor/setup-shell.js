@@ -38,7 +38,10 @@ ctx.shellConnect = function shellConnect() {
         const level = resolveLogLevel(msg.level, msg.value)
         shell.output.value.push({ value: msg.value, level })
       }
-      else if (msg.method === 'finish') shell.running.value = false
+      else if (msg.method === 'finish') {
+        shell.running.value = false
+        shell.lastLineno.value = null
+      }
       else if (msg.method === 'restarted') shell.restarting.value = false
       else if (msg.method === 'gotoLine') shell.lastLineno.value = msg.value
     } catch (e) { /* non-json frames */ }
@@ -49,8 +52,12 @@ ctx.shellConnect = function shellConnect() {
 ctx.flushPendingShell = function flushPendingShell() {
   if (!shell.ws || shell.ws.readyState !== 1) return
   while (shell.pending.length) {
-    const code = shell.pending.shift()
-    const payload = JSON.stringify({ method: 'input', value: code })
+    const item = shell.pending.shift()
+    const payload = JSON.stringify({
+      method: 'input',
+      value: item.code,
+      debug: item.debug,
+    })
     console.log('[ws] send queued', payload)
     shell.ws.send(payload)
   }
@@ -58,16 +65,18 @@ ctx.flushPendingShell = function flushPendingShell() {
 
 ctx.shellRun = function shellRun(code) {
   if (!code) return
+  const debug = !!shell.debugMode.value
   const ready = shell.ws && shell.ws.readyState === 1
   if (!shell.pending.length) shell.output.value = []
   shell.running.value = true
+  shell.lastLineno.value = null
   if (!ready) {
     shellConnect()
-    shell.pending.push(code)
-    console.log('[ws] queued', code)
+    shell.pending.push({ code, debug })
+    console.log('[ws] queued', code, 'debug=', debug)
     return
   }
-  const payload = JSON.stringify({ method: 'input', value: code })
+  const payload = JSON.stringify({ method: 'input', value: code, debug })
   console.log('[ws] send', payload)
   shell.ws.send(payload)
 }

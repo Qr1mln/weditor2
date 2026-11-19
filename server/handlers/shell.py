@@ -227,9 +227,10 @@ class PythonShellHandler(tornado.websocket.WebSocketHandler):
         logger.info("ws recv: %s %s", method, preview)
         if method == 'input':
             code = self._adjust_code(value)
-            code = json.dumps(code) + "\n"
-            logger.debug("send to proc: %s", code.rstrip())
-            await self.__process.stdin_write(code.encode('utf-8'))
+            debug = bool(data.get('debug', False))
+            payload = json.dumps({"code": code, "debug": debug}) + "\n"
+            logger.debug("send to proc: %s", payload.rstrip())
+            await self.__process.stdin_write(payload.encode('utf-8'))
         elif method == "keyboardInterrupt":
             self.send_keyboard_interrupt()
         elif method == "restartKernel":

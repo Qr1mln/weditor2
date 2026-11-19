@@ -4,11 +4,37 @@ window.WEditorSetupModules = window.WEditorSetupModules || {}
 window.WEditorSetupModules.installLifecycle = function (ctx) {
 
 with (ctx) {
-watch(shell.lastLineno, (n) => {
-  if (monacoEditor && n != null) {
-    monacoEditor.revealLineInCenter(n)
-    monacoEditor.setPosition({ lineNumber: n, column: 1 })
+let debugLineDecorations = []
+const clearDebugLineDecoration = () => {
+  if (monacoEditor && debugLineDecorations.length) {
+    debugLineDecorations = monacoEditor.deltaDecorations(debugLineDecorations, [])
+  } else {
+    debugLineDecorations = []
   }
+}
+
+watch(shell.lastLineno, (n) => {
+  clearDebugLineDecoration()
+  if (!shell.debugMode.value || monacoEditor == null || n == null) return
+  const line = Math.max(1, Number(n) || 1)
+  monacoEditor.revealLineInCenter(line)
+  monacoEditor.setPosition({ lineNumber: line, column: 1 })
+  debugLineDecorations = monacoEditor.deltaDecorations(debugLineDecorations, [{
+    range: {
+      startLineNumber: line,
+      startColumn: 1,
+      endLineNumber: line,
+      endColumn: 1,
+    },
+    options: {
+      isWholeLine: true,
+      className: 'weditor-debug-line',
+    },
+  }])
+})
+
+watch(shell.debugMode, (on) => {
+  if (!on) shell.lastLineno.value = null
 })
 
 watch(rightTab, (tab) => {

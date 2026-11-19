@@ -46,6 +46,18 @@ html, body, body *, body *::before, body *::after {
 .pane { border-right: 1px solid #ddd; padding: 8px; overflow: auto; }
 .panel-title { display: flex; align-items: center; gap: 8px; font-weight: bold; margin-bottom: 8px; }
 .coding-toolbar { flex-wrap: wrap; row-gap: 6px; }
+.debug-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: normal;
+  color: #606266;
+}
+.weditor-debug-line {
+  background: rgba(230, 162, 60, 0.18);
+  box-shadow: inset 3px 0 0 #e6a23c;
+}
 .coord-fill-hint {
   flex: none;
   font-size: 12px;

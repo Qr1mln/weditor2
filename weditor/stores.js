@@ -2,6 +2,7 @@
 (function () {
   'use strict'
   const { ref, watch } = Vue
+  const K = window.WEditorConstants
   // ---------- state (formerly Pinia stores) ----------
   const device = {
     platform: ref(localStorage.getItem('platform') || 'Android'),
@@ -21,10 +22,12 @@
     wsOpen: ref(false),
     running: ref(false),
     restarting: ref(false),
+    debugMode: ref(localStorage.getItem(K.DEBUG_MODE_KEY) === '1'),
     output: ref([]),
     lastLineno: ref(null),
     pending: [],
   }
+  watch(shell.debugMode, v => localStorage.setItem(K.DEBUG_MODE_KEY, v ? '1' : '0'))
 
   const editor = {
     code: ref(''),

@@ -3,13 +3,13 @@
 # WRT:{"level": "...", "value": "..."} 输出，level 为 debug/info/warning/error
 # EOF:{running milliseconds} 结束标记
 # DBG:{debug string}
-# LNO:{line number} # 从0开始
+# LNO:{line number} # 从1开始，与 Monaco 行号一致
 
 # 使用方法
 # python3 {__file__}.py
 # >>> print("hello", end="")
-# LNO:0
-# DBG:  0 print("hello", end="")
+# LNO:1
+# DBG:  1 print("hello", end="")
 # WRT:{"level": "info", "value": "hello"}
 # EOF:1
 
@@ -68,11 +68,12 @@ def gen_tracefunc(sys_stdout):
         if event == "line":
             if frame.f_code.co_filename != "<string>":
                 return _trace
-            lineno = frame.f_lineno - 1  # set lineno starts from 0
+            lineno = frame.f_lineno - 1  # getline() starts from 0
             line = getline("<string>", lineno).rstrip()
+            display_lineno = lineno + 1  # Monaco line numbers start from 1
 
-            sys_stdout.write("LNO:{}\n".format(lineno))
-            sys_stdout.write(f"DBG:{lineno:3d} {line}\n")
+            sys_stdout.write("LNO:{}\n".format(display_lineno))
+            sys_stdout.write(f"DBG:{display_lineno:3d} {line}\n")
             sys_stdout.flush()
 
         return _trace
@@ -162,13 +163,30 @@ def input_text(value, dev=None):
 
 
 def stdin_readline():
+    """Read one execution request.
+
+    New protocol: {"code": "...", "debug": true|false}
+    Legacy protocol: a JSON-encoded code string.
+    """
     try:
         line = sys.stdin.readline().rstrip()
-        if line.startswith("\""):
-            line = json.loads(line)
-        _file_contents["<string>"] = line
-        # print(repr(line))
-        return line
+        if not line:
+            raise QuitError("readline", "empty input")
+        try:
+            payload = json.loads(line)
+        except (TypeError, ValueError):
+            payload = line
+        if isinstance(payload, dict):
+            code = payload.get("code", "")
+            debug = bool(payload.get("debug", False))
+        else:
+            code = payload if isinstance(payload, str) else str(payload)
+            debug = False
+        _file_contents["<string>"] = code
+        # print(repr(code))
+        return code, debug
+    except QuitError:
+        raise
     except Exception as e:
         raise QuitError("readline", str(e))
 
@@ -225,7 +243,6 @@ def main():
             if hasattr(_atapi, _name):
                 _globals[_name] = getattr(_atapi, _name)
 
-        sys.settrace(gen_tracefunc(stdout))
         stdout.write("DBG:Python (pid: {})\n".format(os.getpid()))
         while True:
             start = None
@@ -235,11 +252,12 @@ def main():
                 if stderr.isatty():
                     stderr.write(">>> ")
                 stderr.flush()
-                line = stdin_readline()
+                line, debug = stdin_readline()
 
                 start = time.time()
                 sigint_twice = False
 
+                sys.settrace(gen_tracefunc(stdout) if debug else None)
                 ret = exec_code(line, _globals)
                 if ret is not None:
                     print(ret)
@@ -265,6 +283,7 @@ def main():
                              flines[0] + "".join(flines[5:]).rstrip(),
                              "error")  # ignore top 2 stack-frame
             finally:
+                sys.settrace(None)
                 # Code block finished running
                 millis = 0 if start is None else (time.time() - start) * 1000
                 stdout.write("EOF:{}\n".format(int(millis)))
