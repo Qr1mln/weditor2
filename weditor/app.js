@@ -286,6 +286,11 @@
         (currentFileName.value || '未命名.py') + (fileDirty.value ? ' *' : ''))
       const workspaceReady = ref(false)
       const workspaceError = ref('')
+      const fileBrowserVisible = ref(false)
+      const fileBrowserDir = ref('')
+      const fileBrowserEntries = ref([])
+      const fileBrowserLoading = ref(false)
+      const fileBrowserError = ref('')
       let suppressFileDirty = false
       function markFileDirty() {
         if (!suppressFileDirty) fileDirty.value = true
@@ -310,13 +315,16 @@
         return size ? `${size.width} × ${size.height}` : '-'
       }
 
-      const screenInfoText = computed(() => {
-        return screenshotSize.value ? '截图 ' + formatSize(screenshotSize.value) : '-'
-      })
-      const displaySizeText = computed(() => formatSize(displaySize.value))
       const cursorText = computed(() => cursorPoint.value
         ? `${cursorPoint.value.x}, ${cursorPoint.value.y}`
         : '-')
+      const screenMetaText = computed(() => {
+        const parts = [screenModeLabel.value]
+        if (screenshotSize.value) parts.push(formatSize(screenshotSize.value))
+        if (displaySize.value) parts.push(formatSize(displaySize.value))
+        parts.push(zoomPercent.value + '%', '坐标 ' + cursorText.value)
+        return parts.join(' · ')
+      })
 
       function fitScreen() {
         const area = screenAreaEl.value
@@ -495,8 +503,17 @@
 
         if (gesture.mode === 'program') {
           if (distance > 16) {
-            logInteraction('编程模式', '检测到滑动，编程模式仅响应点击（已忽略）', {
-              from: start, to: end,
+            lastProgramTap = null
+            logInteraction('编程模式', '拖拽 Screen，下发 swipe', {
+              x1: start.x, y1: start.y, x2: end.x, y2: end.y, duration: 0.5,
+            })
+            runScreenGesture({
+              action: 'swipe',
+              x1: start.x,
+              y1: start.y,
+              x2: end.x,
+              y2: end.y,
+              duration: 0.5,
             })
             return
           }
@@ -506,7 +523,9 @@
             && Math.hypot(e.clientX - lastProgramTap.x, e.clientY - lastProgramTap.y) <= DOUBLE_TAP_DISTANCE
           if (!isDoubleTap) {
             lastProgramTap = { time: now, x: e.clientX, y: e.clientY }
-            logInteraction('编程模式', '等待双击（第二次点击后插入代码）', { x: start.x, y: start.y })
+            if (coordFillRange) {
+              logInteraction('编程模式', '等待双击（第二次点击后填充坐标）', { x: start.x, y: start.y })
+            }
             return
           }
           lastProgramTap = null
@@ -582,14 +601,7 @@
               steps: total,
             })
             clearCoordFill()
-            return
           }
-          const code = C.genTouch(start.x, start.y)
-          const inserted = insertAtCursor(code)
-          logInteraction('编程模式', '双击插入坐标代码到 Coding 当前位置', {
-            code, inserted,
-            cursor: monacoEditor ? monacoEditor.getPosition() : null,
-          })
           return
         }
 
@@ -854,7 +866,8 @@
       function shellConnect() {
         if (shell.ws && shell.ws.readyState <= 1) return
         const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
-        const wsUrl = `${proto}//${location.host}/ws/v1/python`
+        const fileParam = currentFilePath.value ? '?file=' + encodeURIComponent(currentFilePath.value) : ''
+        const wsUrl = `${proto}//${location.host}/ws/v1/python${fileParam}`
         console.log('[ws] connecting', wsUrl)
         const ws = new WebSocket(wsUrl)
         shell.ws = ws
@@ -1057,6 +1070,13 @@
         }
       }
 
+      function sendToolbarKey(key) {
+        if (suppressToolbarClick) return
+        if (!device.deviceId.value) return ElMessage.warning('Connect first')
+        logInteraction('悬浮工具栏', '下发按键', key)
+        runScreenGesture({ action: 'keyevent', key })
+      }
+
       async function doConnect() {
         try {
           device.connecting.value = true
@@ -1247,7 +1267,7 @@
         let answer
         try {
           answer = await ElMessageBox.prompt(message, title, {
-            confirmButtonText: title === '打开文件' ? '打开' : '创建并打开',
+            confirmButtonText: '创建并打开',
             cancelButtonText: '取消',
             inputValue: defaultValue || '',
           })
@@ -1262,20 +1282,49 @@
         }
       }
 
+      function browserParentDir(path) {
+        const parts = String(path || '').split('/').filter(Boolean)
+        parts.pop()
+        return parts.join('/')
+      }
+
+      async function loadFileBrowserDir(dir) {
+        fileBrowserError.value = ''
+        fileBrowserLoading.value = true
+        try {
+          const data = await apiRequest('/api/v1/files/list?dir=' + encodeURIComponent(dir || ''))
+          fileBrowserDir.value = data.dir || ''
+          fileBrowserEntries.value = data.entries || []
+        } catch (e) {
+          fileBrowserError.value = fileErrorText(e)
+          fileBrowserEntries.value = []
+        } finally {
+          fileBrowserLoading.value = false
+        }
+      }
+
       async function openWorkspaceFile() {
         if (!workspaceReady.value) return ElMessage.warning(workspaceError.value || '项目目录不可用')
+        fileBrowserVisible.value = true
+        await loadFileBrowserDir('')
+      }
+
+      async function onFileBrowserEntryClick(entry) {
+        if (!entry) return
+        if (entry.type === 'dir') {
+          await loadFileBrowserDir(entry.path)
+          return
+        }
         if (!await discardCurrentFile('打开其他文件')) return
-        const path = await promptRelativePath(
-          '打开文件', '输入项目目录下的相对路径，例如 scripts/demo.py', currentFilePath.value || '未命名.py')
-        if (!path) return
         try {
-          const data = await apiRequest('/api/v1/files/content?path=' + encodeURIComponent(path))
-          currentFilePath.value = data.path || path
-          currentFileName.value = data.name || path.split('/').pop() || '未命名.py'
+          const data = await apiRequest('/api/v1/files/content?path=' + encodeURIComponent(entry.path))
+          currentFilePath.value = data.path || entry.path
+          currentFileName.value = data.name || entry.path.split('/').pop() || '未命名.py'
           resetEditorForFile(data.content || '')
+          fileBrowserVisible.value = false
           ElMessage.success('已打开 ' + currentFilePath.value)
         } catch (e) {
-          ElMessage.error('打开文件失败：' + fileErrorText(e))
+          fileBrowserError.value = '打开文件失败：' + fileErrorText(e)
         }
       }
 
@@ -1314,20 +1363,6 @@
         } catch (e) {
           ElMessage.error('新建失败：' + fileErrorText(e))
         }
-      }
-
-      function insertAtCursor(text) {
-        if (!monacoEditor) {
-          editor.code.value += text
-          return false
-        }
-        monacoEditor.executeEdits('weditor-screen-touch', [{
-          range: monacoEditor.getSelection(),
-          text,
-          forceMoveMarkers: true,
-        }])
-        monacoEditor.focus()
-        return true
       }
 
       function insertSnippet(code) {
@@ -1747,17 +1782,20 @@
         templateAssets, templateAssetsLoading,
         toolbarEl, toolbarStyle, toolbarDragging, screenshotLoading,
         screenMode, screenModeLabel, screenModeTitle, screenWebSocketUrl, minicapConnecting,
-        screenInfoText, displaySizeText, zoomPercent, cursorText,
+        screenMetaText,
         cursorPoint, coordTipStyle,
         doConnect, dumpHierarchy, onNodeClick, doTap, fitScreen, startSplitResize, startConsoleResize,
         loadTemplateAssets, deleteTemplateAsset, useTemplateAsset,
-        startToolbarDrag, refreshScreenshotFromToolbar, toggleScreenMode,
+        startToolbarDrag, refreshScreenshotFromToolbar, toggleScreenMode, sendToolbarKey,
         onScreenMouseDown, onScreenMouseMove, onScreenMouseLeave,
         runCode, runSelected, runCurrentLine, shellInterrupt, shellRestart,
         toggleConsoleLevel, resetConsoleSettings,
         useAction, toggleActions, actionGroupName,
         currentFileName, fileDirty, fileTabLabel, currentFilePath,
         projectPath, projectLabel, workspaceReady, workspaceError,
+        fileBrowserVisible, fileBrowserDir, fileBrowserEntries,
+        fileBrowserLoading, fileBrowserError, browserParentDir,
+        loadFileBrowserDir, onFileBrowserEntryClick,
         openWorkspaceFile, saveCodeFile, createWorkspaceFile,
         genClearCode: C.genClearCode,
       }
@@ -1796,13 +1834,7 @@
             </div>
             <div class="panel-title">
               Screen
-              <div class="screen-meta">
-                <span>投屏：{{ screenModeLabel }}</span>
-                <span>屏幕信息：{{ screenInfoText }}</span>
-                <span>大小：{{ displaySizeText }}</span>
-                <span>当前缩放：{{ zoomPercent }}%</span>
-                <span>坐标：{{ cursorText }}</span>
-              </div>
+              <div class="screen-meta" :title="screenMetaText">{{ screenMetaText }}</div>
             </div>
             <div class="screen-area" ref="screenAreaEl">
               <div v-if="screenImg" class="screen-frame" :style="frameStyle">
@@ -2028,6 +2060,30 @@
           @mousedown="startToolbarDrag"
         >
           <el-button
+            class="toolbar-key"
+            size="small"
+            circle
+            aria-label="返回键"
+            title="模拟返回键 (BACK)"
+            @click="sendToolbarKey('BACK')"
+          >
+            <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M20 11H7.8l5.6-5.6L12 4l-8 8 8 8 1.4-1.4L7.8 13H20z" />
+            </svg>
+          </el-button>
+          <el-button
+            class="toolbar-key"
+            size="small"
+            circle
+            aria-label="HOME 键"
+            title="模拟 HOME 键"
+            @click="sendToolbarKey('HOME')"
+          >
+            <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 3 2 11h3v9h6v-6h2v6h6v-9h3z" />
+            </svg>
+          </el-button>
+          <el-button
             class="toolbar-refresh"
             size="small"
             circle
@@ -2041,6 +2097,33 @@
             </svg>
           </el-button>
         </div>
+
+        <el-dialog v-model="fileBrowserVisible" title="打开文件" width="560px" class="file-browser-dialog">
+          <div class="file-browser-bar">
+            <el-button size="small" :disabled="!fileBrowserDir" @click="loadFileBrowserDir(browserParentDir(fileBrowserDir))">上级</el-button>
+            <span class="file-browser-path" :title="fileBrowserDir">{{ fileBrowserDir || '项目根目录' }}</span>
+            <el-button size="small" @click="loadFileBrowserDir(fileBrowserDir)">刷新</el-button>
+          </div>
+          <div v-loading="fileBrowserLoading" class="file-browser-list">
+            <div
+              v-for="entry in fileBrowserEntries"
+              :key="entry.path"
+              class="file-browser-item"
+              :title="entry.path"
+              @click="onFileBrowserEntryClick(entry)"
+            >
+              <span class="file-browser-icon" :class="entry.type === 'dir' ? 'folder' : 'file'">
+                {{ entry.type === 'dir' ? '目录' : '文件' }}
+              </span>
+              <span class="file-browser-name">{{ entry.name }}</span>
+            </div>
+            <div v-if="!fileBrowserEntries.length && !fileBrowserLoading" class="placeholder">当前目录为空</div>
+          </div>
+          <p v-if="fileBrowserError" class="file-browser-error">{{ fileBrowserError }}</p>
+          <template #footer>
+            <el-button size="small" @click="fileBrowserVisible = false">取消</el-button>
+          </template>
+        </el-dialog>
       </el-container>
     `,
   }).use(window.ElementPlus).mount('#app')

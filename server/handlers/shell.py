@@ -101,11 +101,22 @@ class PythonShellHandler(tornado.websocket.WebSocketHandler):
         AsyncSubprocess = WinAsyncSubprocess if IS_WINDOWS else PosixAsyncSubprocess
         env = os.environ.copy()
         env['PYTHONIOENCODING'] = "utf-8"
+        project_root = os.path.abspath(
+            self.application.settings.get('project_root') or os.getcwd())
+        env['WEDITOR_PROJECT_ROOT'] = project_root
+        script_file = self.get_query_argument('file', '')
+        if script_file:
+            candidate = os.path.abspath(os.path.join(project_root, script_file))
+            if os.path.commonpath([
+                    os.path.normcase(project_root),
+                    os.path.normcase(candidate)
+            ]) == os.path.normcase(project_root):
+                env['WEDITOR_SCRIPT_FILE'] = candidate
         self.__process = AsyncSubprocess(
             [sys.executable, "-u",
              os.path.join(ROOT_DIR, "../ipyshell-console.py")],
             env=env,
-            cwd=self._tmpdir,
+            cwd=project_root,
             stdin=Subprocess.STREAM,
             stdout=Subprocess.STREAM,
             stderr=subprocess.STDOUT) # yapf: disable

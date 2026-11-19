@@ -210,6 +210,47 @@ class WorkspaceFilesHandler(BaseHandler):
         self.write({'success': True, 'path': rel, 'name': os.path.basename(path)})
 
 
+class WorkspaceListHandler(WorkspaceFilesHandler):
+    def get(self):
+        rel = self.get_query_argument('dir', '').strip().replace('\\', '/')
+        root = os.path.realpath(self._root())
+        if rel:
+            resolved = self._resolve(rel)
+            if not resolved:
+                return
+            path, rel_norm = resolved
+        else:
+            path, rel_norm = root, ''
+        root_norm = os.path.normcase(root)
+        if os.path.commonpath([
+                root_norm, os.path.normcase(os.path.realpath(path))
+        ]) != root_norm:
+            return self._fail(400, '目录超出工作区')
+        if not os.path.isdir(path):
+            return self._fail(404, '目录不存在：' + (rel_norm or '工作区根目录'))
+        entries = []
+        try:
+            with os.scandir(path) as items:
+                for item in items:
+                    if item.is_symlink():
+                        continue
+                    if item.is_dir(follow_symlinks=False):
+                        kind = 'dir'
+                    elif item.is_file(follow_symlinks=False):
+                        kind = 'file'
+                    else:
+                        continue
+                    entries.append({
+                        'name': item.name,
+                        'path': (rel_norm + '/' if rel_norm else '') + item.name,
+                        'type': kind,
+                    })
+        except OSError as exc:
+            return self._fail(500, '读取目录失败：' + str(exc))
+        entries.sort(key=lambda entry: (entry['type'] != 'dir', entry['name'].lower()))
+        self.write({'success': True, 'dir': rel_norm, 'entries': entries})
+
+
 def make_app(settings={}):
     application = tornado.web.Application(
         [
@@ -219,6 +260,7 @@ def make_app(settings={}):
             (r"/api/v1/version", VersionHandler),
             (r"/api/v1/project", ProjectHandler),
             (r"/api/v1/files", WorkspaceFilesHandler),
+            (r"/api/v1/files/list", WorkspaceListHandler),
             (r"/api/v1/files/content", WorkspaceFilesHandler),
             (r"/api/v1/connect", DeviceConnectHandler),
             (r"/api/v1/crop", CropHandler),

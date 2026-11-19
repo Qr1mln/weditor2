@@ -320,6 +320,8 @@ class DeviceGestureHandler(BaseHandler):
                     int(data['y2']),
                     float(data.get('duration', 0.5)),
                 )
+            elif action == 'keyevent':
+                d.keyevent(data['key'])
             else:
                 raise ValueError('unsupported gesture action: %s' % action)
             self.write({"success": True})

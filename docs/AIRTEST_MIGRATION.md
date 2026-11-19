@@ -550,8 +550,8 @@ tests/  docs/
 
 ### 13.2 文件操作改造
 - 移除前端 Explorer 目录树、File System Access API（`showDirectoryPicker` / `showOpenFilePicker`）、权限请求与句柄缓存；不再有浏览器文件夹授权弹窗。
-- 保留三个操作：打开、保存、新建。打开/新建输入项目根目录下的相对路径；保存只写回当前已打开的文件，不下载。
-- 后端在 `server/__main__.py` 提供 `/api/v1/project`、`/api/v1/files`（POST 新建）、`/api/v1/files/content`（GET 读取 / PUT 写回）。写入使用同目录临时文件 + `os.replace` 原子替换。
+- 保留三个操作：打开、保存、新建。打开使用页面内文件浏览器（后端列目录、前端点选），不依赖系统窗口；新建输入项目根目录下的相对路径；保存只写回当前已打开的文件，不下载。
+- 后端在 `server/__main__.py` 提供 `/api/v1/project`、`/api/v1/files/list`（GET 列目录）、`/api/v1/files`（POST 新建）、`/api/v1/files/content`（GET 读取 / PUT 写回）。写入使用同目录临时文件 + `os.replace` 原子替换。
 - 路径校验同时存在于前后端：拒绝绝对路径、`.` / `..` 段，并通过 `os.path.commonpath` 保证不越出工作目录；非 UTF-8 文本、文件不存在、已存在等情况返回明确错误。
 - 原 `server/handlers/files.py` 及旧 workspace 路由已删除；`docs/API.md` 已同步接口说明。
 

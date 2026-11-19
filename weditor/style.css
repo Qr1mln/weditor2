@@ -202,6 +202,55 @@ html, body, body *, body *::before, body *::after {
   color: #f56c6c;
   font-size: 12px;
 }
+.file-browser-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.file-browser-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #606266;
+  font-size: 12px;
+}
+.file-browser-list {
+  min-height: 240px;
+  max-height: 420px;
+  overflow: auto;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+}
+.file-browser-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.file-browser-item:hover { background: #f5f7fa; }
+.file-browser-icon {
+  flex: none;
+  min-width: 34px;
+  color: #909399;
+  font-size: 11px;
+}
+.file-browser-icon.folder { color: #dcb67a; }
+.file-browser-icon.file { color: #4b8bbe; }
+.file-browser-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-browser-error {
+  margin: 10px 0 0;
+  color: #f56c6c;
+  font-size: 12px;
+}
 .coding-actions {
   flex: none;
   box-sizing: border-box;

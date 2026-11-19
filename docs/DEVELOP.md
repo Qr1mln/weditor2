@@ -29,7 +29,7 @@ weditor/
     └── monaco/vs/                   # AMD 版 + worker
 ```
 
-后端 `python -m weditor2`（默认端口 17310）通过 `FrontendHandler` 提供 `/`（`/new` 为别名），`/static/` 由 Tornado 静态托管。除原有设备 API 外，文件操作使用 `/api/v1/project`、`/api/v1/files`、`/api/v1/files/content`，根目录由 `--workspace` 指定（缺省为当前工作目录）。
+后端 `python -m weditor2`（默认端口 17310）通过 `FrontendHandler` 提供 `/`（`/new` 为别名），`/static/` 由 Tornado 静态托管。除原有设备 API 外，文件操作使用 `/api/v1/project`、`/api/v1/files/list`（目录列表）、`/api/v1/files`（新建）、`/api/v1/files/content`（读写），根目录由 `--workspace` 指定（缺省为当前工作目录）。
 
 运行 codegen 单测：
 

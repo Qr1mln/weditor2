@@ -35,13 +35,19 @@ Status: 200
 
 ## File operations
 
-文件读写根目录由启动命令的项目目录参数决定，所有接口只接受该目录内的相对路径，服务端会拒绝 `..`、绝对路径与越界路径。
+文件读写根目录由启动命令的 `--workspace` 参数（或位置参数）决定，所有接口只接受该目录内的相对路径，服务端会拒绝 `..`、绝对路径与越界路径。
 
 ### Get project info
 ```
 GET /api/v1/project
 ```
 返回 `{"success": true, "root": "绝对路径", "name": "目录名"}`。
+
+### List directory
+```
+GET /api/v1/files/list?dir=scripts
+```
+`dir` 省略时列出根目录。返回 `{"success": true, "dir": "scripts", "entries": [{"name": "demo.py", "path": "scripts/demo.py", "type": "file"}]}`；目录项 `type` 为 `dir`，文件项为 `file`，目录排在前面。符号链接会被忽略。
 
 ### Read file
 ```

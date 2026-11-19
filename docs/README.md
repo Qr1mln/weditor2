@@ -43,9 +43,10 @@ python -m weditor2 --workspace D:\work\myproject
 ```
 
 `--workspace` sets the root folder for file operations. Omit it to use the
-current working directory. The editor's 打开 / 保存 / 新建 actions work with
-relative paths under this folder; 保存 writes back to the already-opened local
-file (it never downloads a copy).
+current working directory. Clicking 打开 shows an in-page file browser for
+this folder; pick a file there to load it. 新建 creates a file in the folder,
+and 保存 writes back to the already-opened local file (it never downloads a
+copy).
 
 Create Shortcut in Desktop (Only windows)
 

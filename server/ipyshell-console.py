@@ -59,23 +59,21 @@ def getline(filename: str, lineno: int) -> str:
         return ''
 
 
-def gen_tracefunc(trace_filename: str, sys_stdout):
+def gen_tracefunc(sys_stdout):
     """
     Ref: http://www.dalkescientific.com/writings/diary/archive/2005/04/20/tracing_python_code.html
     """
 
     def _trace(frame, event, arg):
         if event == "line":
+            if frame.f_code.co_filename != "<string>":
+                return _trace
             lineno = frame.f_lineno - 1  # set lineno starts from 0
-            filename = frame.f_globals.get("__file__")
+            line = getline("<string>", lineno).rstrip()
 
-            if filename == trace_filename:
-                line = getline(filename, lineno).rstrip()
-
-                sys_stdout.write("LNO:{}\n".format(lineno))
-                sys_stdout.write(f"DBG:{lineno:3d} {line}\n")
-                sys_stdout.flush()
-                # time.sleep(.5)
+            sys_stdout.write("LNO:{}\n".format(lineno))
+            sys_stdout.write(f"DBG:{lineno:3d} {line}\n")
+            sys_stdout.flush()
 
         return _trace
 
@@ -177,8 +175,13 @@ def stdin_readline():
 
 def main():
     sigint_twice = False
+    project_root = os.path.abspath(
+        os.environ.get('WEDITOR_PROJECT_ROOT') or os.getcwd())
+    script_file = os.environ.get('WEDITOR_SCRIPT_FILE', '')
+    if not (script_file and os.path.isfile(script_file)):
+        script_file = project_root
     _globals = {
-        "__file__": "<string>",
+        "__file__": script_file,
         "__name__": "__main__",
         "os": os,
         "sys": sys,
@@ -190,6 +193,12 @@ def main():
         # preload airtest into the REPL global namespace
         import airtest
         import airtest.core.api as _atapi
+        import airtest.core.helper as _helper
+        from airtest.core.settings import Settings as _settings
+        for _base in (project_root, os.path.join(project_root, 'asserts')):
+            if os.path.isdir(_base) and _base not in _helper.G.BASEDIR:
+                _helper.G.BASEDIR.append(_base)
+        _settings.PROJECT_ROOT = project_root
         # airtest.core.api installs a StreamHandler on sys.stderr at import time,
         # which is our "error" stream here; replace it so every record keeps
         # its own level instead of being reported as an error
@@ -216,7 +225,7 @@ def main():
             if hasattr(_atapi, _name):
                 _globals[_name] = getattr(_atapi, _name)
 
-        sys.settrace(gen_tracefunc("<string>", stdout))
+        sys.settrace(gen_tracefunc(stdout))
         stdout.write("DBG:Python (pid: {})\n".format(os.getpid()))
         while True:
             start = None
