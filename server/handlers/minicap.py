@@ -2,6 +2,9 @@
 #
 """Minicap WebSocket bridge: streams Airtest minicap JPEG frames to the browser."""
 
+import os
+import re
+import threading
 from urllib.parse import quote
 
 import tornado.ioloop
@@ -9,6 +12,57 @@ import tornado.websocket
 from logzero import logger
 
 from ..device import get_device
+
+MINICAP_DIR = '/data/local/tmp'
+MINICAP_BIN = MINICAP_DIR + '/minicap'
+MINICAP_SO = MINICAP_DIR + '/minicap.so'
+MINICAP_CMD = 'LD_LIBRARY_PATH=%s %s' % (MINICAP_DIR, MINICAP_BIN)
+_minicap_lock = threading.Lock()
+
+
+def _minicap_version(adb):
+    try:
+        output = adb.raw_shell('%s -v 2>&1' % MINICAP_CMD)
+    except Exception:
+        return -1
+    match = re.search(r'version:(\d+)', output or '')
+    return int(match.group(1)) if match else -1
+
+
+def ensure_minicap_installed(adb):
+    """Install minicap with raw adb push, bypassing airtest>=1.4 Adb.push() bug.
+
+    airtest 1.4.x pushes extensionless files into TMP_PATH first, then copies/moves
+    them to the same path (/data/local/tmp/minicap) and finally deletes it.
+    """
+    with _minicap_lock:
+        if (adb.exists_file(MINICAP_BIN) and adb.exists_file(MINICAP_SO)
+                and _minicap_version(adb) >= 5):
+            return
+
+        import airtest.core.android.constant as airtest_constant
+        stflib = airtest_constant.STFLIB
+        abi = adb.getprop('ro.product.cpu.abi')
+        sdk = adb.sdk_version
+        preview = adb.getprop('ro.build.version.preview_sdk')
+        release = adb.getprop('ro.build.version.release')
+        if preview.isdigit() and int(preview) > 0:
+            sdk += 1
+        binfile = 'minicap' if sdk >= 16 else 'minicap-nopie'
+        binary = os.path.join(stflib, abi, binfile)
+        pattern = os.path.join(stflib, 'minicap-shared', 'aosp', 'libs',
+                               'android-%s', abi, 'minicap.so')
+        shared = pattern % sdk
+        if not os.path.isfile(shared):
+            shared = pattern % release
+        if not os.path.isfile(binary) or not os.path.isfile(shared):
+            raise RuntimeError('minicap binaries not found: %s / %s' % (binary, shared))
+
+        adb.raw_shell('rm -rf %s %s' % (MINICAP_BIN, MINICAP_SO))
+        adb.cmd(['push', binary, MINICAP_BIN])
+        adb.cmd(['push', shared, MINICAP_SO])
+        adb.raw_shell('chmod 755 %s %s' % (MINICAP_BIN, MINICAP_SO))
+        logger.info('minicap installed via raw adb push (abi=%s, sdk=%s)', abi, sdk)
 
 
 def build_screen_websocket_url(device_obj):
@@ -52,9 +106,12 @@ class MinicapWebSocketHandler(tornado.websocket.WebSocketHandler):
                 from airtest.core.android.cap_methods.minicap import Minicap
             except ImportError:
                 from airtest.core.android.minicap import Minicap
+            ensure_minicap_installed(adb)
             self.minicap = Minicap(adb)
+            # 已经用原生 adb push 安装好，禁止 airtest 再走自身有 bug 的安装流程。
+            self.minicap.install_or_upgrade = lambda: None
             # airtest 的 CMD 是类属性，实例级覆盖以追加 -q 质量参数（不改分辨率）。
-            self.minicap.CMD = '%s -q %d' % (
+            self.minicap.CMD = '%s -Q %d' % (
                 self.minicap.CMD, self.MINICAP_JPEG_QUALITY)
             self.running = True
             self.io_loop.run_in_executor(None, self._stream_frames)
