@@ -108,12 +108,14 @@ watch(actionsCollapsed, (v) => {
 ctx.templateAssets = ref([])
 ctx.templateAssetsLoading = ref(false)
 ctx.MODE_LABELS = { operate: '操作', template: '模板' }
-ctx.TEMPLATE_COMMANDS = ['touchTemplate', 'wait', 'exists']
+ctx.TEMPLATE_COMMANDS = ['template', 'touchTemplate', 'wait', 'exists']
 // Screen 模式只由当前选中的命令决定；没有命令时永远是默认的 tap/swipe。
 ctx.activeMode = computed(() =>
   ctx.TEMPLATE_COMMANDS.includes(activeCommand.value) ? 'template' : 'operate')
 // 命令 → 插入的代码与 Screen 鼠标触发关系（填充参数，而非执行设备手势）。
 ctx.COMMAND_TRIGGERS = {
+  coord: '双击 Screen 获取坐标，替换当前选中内容为 (x, y)（无选中则插入）',
+  template: '框选 Screen 图像并双击确认，替换当前选中内容为模板路径',
   touch: '已插入 touch((x, y))，双击 Screen 填充坐标',
   touchTemplate: '已插入 touch(Template(...))，框选 Screen 图像保存模板并填充路径',
   swipe: '已插入 swipe(...)，双击 Screen 依次填充起点与终点',

@@ -81,6 +81,56 @@ ctx.onGestureUp = function onGestureUp(e) {
     return
   }
 
+  // 插入坐标命令：双击 Screen 取坐标，直接插入到编辑器当前光标位置。
+  if (activeCommand.value === 'coord') {
+    if (distance > 16) {
+      lastProgramTap = null
+      return
+    }
+    const now = Date.now()
+    const isDoubleTap = lastProgramTap
+      && now - lastProgramTap.time <= DOUBLE_TAP_MS
+      && Math.hypot(e.clientX - lastProgramTap.x, e.clientY - lastProgramTap.y) <= DOUBLE_TAP_DISTANCE
+    if (!isDoubleTap) {
+      lastProgramTap = { time: now, x: e.clientX, y: e.clientY }
+      return
+    }
+    lastProgramTap = null
+    const text = `(${start.x}, ${start.y})`
+    logInteraction('命令工具栏', '获取坐标', { x: start.x, y: start.y, text })
+    if (monacoEditor) {
+      const selection = monacoEditor.getSelection()
+      const model = monacoEditor.getModel()
+      if (selection && model) {
+        const range = {
+          startLineNumber: selection.startLineNumber,
+          startColumn: selection.startColumn,
+          endLineNumber: selection.endLineNumber,
+          endColumn: selection.endColumn,
+        }
+        coordFillEditing = true
+        monacoEditor.pushUndoStop()
+        monacoEditor.executeEdits('weditor-coord-replace', [{
+          range,
+          text,
+          forceMoveMarkers: true,
+        }])
+        monacoEditor.pushUndoStop()
+        coordFillEditing = false
+        monacoEditor.setPosition({
+          lineNumber: range.startLineNumber,
+          column: range.startColumn + text.length,
+        })
+        monacoEditor.focus()
+      }
+    } else {
+      editor.code.value += text
+    }
+    logInteraction('命令工具栏', '双击 Screen 获取坐标并替换选中内容', { x: start.x, y: start.y, text })
+    clearActiveCommand()
+    return
+  }
+
   // 命令处于选中状态：Screen 鼠标只用于给已插入的代码填充坐标参数。
   if (activeCommand.value === 'touch' || activeCommand.value === 'swipe') {
     if (distance > 16) {

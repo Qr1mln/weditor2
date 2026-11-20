@@ -98,13 +98,21 @@ ctx.newlineAfterCommand = function newlineAfterCommand(lineNumber) {
 ctx.saveTemplateFill = async function saveTemplateFill(bounds) {
   if (!monacoEditor) return
   const actionId = templateFillAction || 'wait'
-  if (!templateFillRange) {
+  const replaceSelection = actionId === 'template'
+  const selection = replaceSelection ? monacoEditor.getSelection() : null
+  const selectionRange = selection ? {
+    startLineNumber: selection.startLineNumber,
+    startColumn: selection.startColumn,
+    endLineNumber: selection.endLineNumber,
+    endColumn: selection.endColumn,
+  } : null
+  const targetRange = replaceSelection ? selectionRange : templateFillRange
+  if (!targetRange) {
     ElMessage.error('模板参数选中状态已失效，请重新点击 ' + actionId)
     clearActiveCommand()
     return
   }
-  const range = templateFillRange
-  const lineNumber = range.startLineNumber
+  const lineNumber = targetRange.startLineNumber
   templateFillRange = null
   const name = 'temp_' + Date.now()
   try {
@@ -117,27 +125,58 @@ ctx.saveTemplateFill = async function saveTemplateFill(bounds) {
       body: JSON.stringify({ screenshot: shot, bounds: croppedBounds, name }),
     }).then(r => r.json())
     if (!resp.success) throw new Error(resp.description || 'save failed')
+    coordFillEditing = true
     monacoEditor.pushUndoStop()
     monacoEditor.executeEdits('weditor-template-fill', [{
-      range,
+      range: targetRange,
       text: resp.path,
       forceMoveMarkers: true,
     }])
     monacoEditor.pushUndoStop()
-    monacoEditor.setPosition({ lineNumber, column: range.startColumn + String(resp.path).length })
-    newlineAfterCommand(lineNumber)
+    coordFillEditing = false
+    monacoEditor.setPosition({
+      lineNumber: targetRange.startLineNumber,
+      column: targetRange.startColumn + String(resp.path).length,
+    })
+    if (!replaceSelection) newlineAfterCommand(lineNumber)
     loadTemplateAssets()
-    ElMessage.success('已保存模板并填充路径')
-    logInteraction('模板模式', '框选截图保存并填充 ' + actionId + ' 参数', { name, path: resp.path, bounds })
+    ElMessage.success(replaceSelection ? '已保存模板并替换选中内容' : '已保存模板并填充路径')
+    logInteraction('模板模式', replaceSelection
+      ? '框选截图保存并替换选中内容'
+      : '框选截图保存并填充 ' + actionId + ' 参数', { name, path: resp.path, bounds })
   } catch (e) {
     ElMessage.error('模板截图保存失败: ' + (e && e.message ? e.message : String(e)))
   } finally {
+    coordFillEditing = false
     clearActiveCommand()
     templateRect.value = null
   }
 }
 
 ctx.useAction = function useAction(action) {
+  if (action.id === 'coord') {
+    activeSnippet.value = action.id
+    activeCommand.value = action.id
+    clearCoordFill()
+    clearTemplateFill()
+    pendingCoordHint.value = true
+    coordHintText.value = '双击 Screen 获取坐标，替换当前选中内容'
+    logInteraction('命令工具栏', '启用插入坐标（等待双击 Screen）')
+    ElMessage({ message: coordHintText.value, type: 'info', duration: 4000 })
+    return
+  }
+  if (action.id === 'template') {
+    activeSnippet.value = action.id
+    activeCommand.value = action.id
+    clearCoordFill()
+    clearTemplateFill()
+    pendingTemplateFill.value = true
+    templateFillAction = action.id
+    templateHintText.value = '在 Screen 框选范围后双击确认保存模板'
+    logInteraction('命令工具栏', '启用插入模板（等待框选 Screen）')
+    ElMessage({ message: templateHintText.value, type: 'info', duration: 4000 })
+    return
+  }
   const templateMode = action.id === 'touchTemplate' || action.id === 'wait' || action.id === 'exists'
   const code = templateMode && action.templateCode ? action.templateCode : action.code
   const inserted = insertSnippet(code)
@@ -454,6 +493,336 @@ ctx.installTemplatePreview = function installTemplatePreview(editor) {
   window.addEventListener('scroll', hide, true)
 }
 
+ctx.installTemplateInlineImages = function installTemplateInlineImages(editor, internals) {
+  const STORAGE_KEY = 'weditor.templateInlineImages'
+  const POSITION_KEY = 'weditor.templateInlineImagesPosition'
+  const COMMAND_ID = 'weditor.toggleTemplateInlineImages'
+  const CONTEXT_KEY = 'weditor.templateInlineImages'
+  const COMMAND_BELOW = 'weditor.templateImagesBelow'
+  const COMMAND_ABOVE = 'weditor.templateImagesAbove'
+  const COMMAND_END = 'weditor.templateImagesEnd'
+  const POSITION_BELOW_KEY = 'weditor.templateImagesBelow'
+  const POSITION_ABOVE_KEY = 'weditor.templateImagesAbove'
+  const POSITION_END_KEY = 'weditor.templateImagesEnd'
+  const SIZE_KEY = 'weditor.templateImagesSize'
+  const SIZE_COMMAND_PREFIX = 'weditor.templateImagesSize.'
+  const SIZE_POSITION_KEY_PREFIX = 'weditor.templateImagesSizeActive.'
+  const SIZE_SCALES = [1, 2, 3, 5]
+  const VALID_POSITIONS = ['below', 'above', 'end']
+  let enabled = localStorage.getItem(STORAGE_KEY) !== '0'
+  const savedPosition = localStorage.getItem(POSITION_KEY)
+  let position = VALID_POSITIONS.includes(savedPosition) ? savedPosition : 'end'
+  const savedScale = Number(localStorage.getItem(SIZE_KEY))
+  let sizeScale = SIZE_SCALES.includes(savedScale) ? savedScale : 1
+  let zoneIds = []
+  let widgets = []
+  let refreshTimer = null
+  let rebuildToken = 0
+  let enabledContextKey = null
+  let positionBelowContextKey = null
+  let positionAboveContextKey = null
+  let positionEndContextKey = null
+  const sizeContextKeys = {}
+
+  function templateTargets() {
+    const model = editor.getModel()
+    if (!model) return []
+    const re = /Template\s*\(\s*(['"])(.*?)\1/g
+    const seenLines = new Set()
+    const targets = []
+    for (let line = 1; line <= model.getLineCount(); line++) {
+      const text = model.getLineContent(line)
+      re.lastIndex = 0
+      let match
+      while ((match = re.exec(text)) !== null) {
+        if (!match[2] || seenLines.has(line)) continue
+        seenLines.add(line)
+        targets.push({ path: match[2], lineNumber: line })
+      }
+    }
+    return targets
+  }
+
+  function resolveUrl(path) {
+    const filename = String(path).split(/[\\/]/).pop() || ''
+    const asset = (templateAssets.value || []).find(a => a.path === path || a.filename === filename)
+    return (asset && asset.url) || (filename ? '/widgets/templates/' + encodeURIComponent(filename) : '')
+  }
+
+  function clearAll() {
+    const ids = zoneIds.slice()
+    zoneIds = []
+    if (ids.length) {
+      editor.changeViewZones(accessor => {
+        ids.forEach(id => accessor.removeZone(id))
+      })
+    }
+    const currentWidgets = widgets.slice()
+    widgets = []
+    currentWidgets.forEach(widget => editor.removeContentWidget(widget))
+  }
+
+  function loadImage(url) {
+    return new Promise(resolve => {
+      const probe = new Image()
+      probe.onload = () => resolve({ url: url, height: probe.naturalHeight, width: probe.naturalWidth })
+      probe.onerror = () => resolve(null)
+      probe.src = url
+    })
+  }
+
+  function getLineHeight() {
+    const monaco = internals && internals.monaco
+    try {
+      if (monaco && monaco.editor && monaco.editor.EditorOption
+        && monaco.editor.EditorOption.lineHeight !== undefined) {
+        return editor.getOption(monaco.editor.EditorOption.lineHeight) || 19
+      }
+    } catch (e) {}
+    return 19
+  }
+
+  function maxImageHeight() {
+    return Math.max(12, getLineHeight() * sizeScale)
+  }
+
+  function mountZone(lineNumber, loaded) {
+    const node = document.createElement('div')
+    node.className = 'weditor-template-inline'
+    const img = document.createElement('img')
+    img.src = loaded.url
+    img.alt = ''
+    const cap = maxImageHeight()
+    img.style.maxHeight = cap + 'px'
+    img.style.maxWidth = '100%'
+    img.style.width = 'auto'
+    img.style.height = 'auto'
+    node.appendChild(img)
+    const shownHeight = loaded.height ? Math.min(loaded.height, cap) : cap
+    const height = shownHeight + 12
+    const afterLine = position === 'above' ? Math.max(0, lineNumber - 1) : lineNumber
+    editor.changeViewZones(accessor => {
+      zoneIds.push(accessor.addZone({
+        afterLineNumber: afterLine,
+        heightInPx: height,
+        domNode: node,
+      }))
+    })
+  }
+
+  function mountEndWidget(lineNumber, loaded) {
+    const node = document.createElement('div')
+    node.className = 'weditor-template-end'
+    const img = document.createElement('img')
+    img.src = loaded.url
+    img.alt = ''
+    const cap = maxImageHeight()
+    img.style.maxHeight = cap + 'px'
+    img.style.width = 'auto'
+    img.style.height = 'auto'
+    node.appendChild(img)
+    const model = editor.getModel()
+    const column = model ? model.getLineMaxColumn(lineNumber) : 1
+    const preference = (internals && internals.monaco && internals.monaco.editor
+      && internals.monaco.editor.ContentWidgetPositionPreference
+      && internals.monaco.editor.ContentWidgetPositionPreference.EXACT) || 0
+    const widgetId = 'weditor.template.end.' + lineNumber + '.' + Date.now() + '.' + Math.random().toString(36).slice(2)
+    const widget = {
+      getId: () => widgetId,
+      getDomNode: () => node,
+      getPosition: () => ({
+        position: { lineNumber: lineNumber, column: column },
+        preference: [preference],
+      }),
+      allowEditorOverflow: true,
+      suppressMouseDown: true,
+    }
+    editor.addContentWidget(widget)
+    widgets.push(widget)
+  }
+
+  async function rebuild() {
+    const token = ++rebuildToken
+    if (!enabled) { clearAll(); return }
+    const targets = templateTargets()
+    const prepared = await Promise.all(targets.map(async (item) => {
+      const url = resolveUrl(item.path)
+      const loaded = url ? await loadImage(url) : null
+      return { lineNumber: item.lineNumber, loaded: loaded }
+    }))
+    if (token !== rebuildToken) return
+    clearAll()
+    for (const entry of prepared) {
+      if (!entry.loaded) continue
+      if (position === 'end') mountEndWidget(entry.lineNumber, entry.loaded)
+      else mountZone(entry.lineNumber, entry.loaded)
+    }
+  }
+
+  function scheduleRebuild() {
+    if (!enabled) return
+    clearTimeout(refreshTimer)
+    refreshTimer = setTimeout(rebuild, 200)
+  }
+
+  function toggle() {
+    enabled = !enabled
+    localStorage.setItem(STORAGE_KEY, enabled ? '1' : '0')
+    if (enabledContextKey) enabledContextKey.set(enabled)
+    ElMessage({
+      message: enabled ? '已开启固定图片预览' : '已关闭固定图片预览',
+      type: 'info',
+      duration: 1500,
+    })
+    rebuild()
+  }
+
+  function setPosition(value) {
+    if (position === value) return
+    position = value
+    localStorage.setItem(POSITION_KEY, value)
+    if (positionBelowContextKey) positionBelowContextKey.set(value === 'below')
+    if (positionAboveContextKey) positionAboveContextKey.set(value === 'above')
+    if (positionEndContextKey) positionEndContextKey.set(value === 'end')
+    const messages = {
+      above: '图片已移到代码行上方',
+      below: '图片已移到代码行下方',
+      end: '图片已浮动到代码行尾',
+    }
+    ElMessage({ message: messages[value], type: 'info', duration: 1200 })
+    rebuild()
+  }
+
+  function setSize(scale) {
+    if (sizeScale === scale) return
+    sizeScale = scale
+    localStorage.setItem(SIZE_KEY, String(scale))
+    SIZE_SCALES.forEach(s => {
+      if (sizeContextKeys[s]) sizeContextKeys[s].set(s === scale)
+    })
+    ElMessage({ message: '图片最大高度：' + scale + ' 倍行高', type: 'info', duration: 1200 })
+    rebuild()
+  }
+
+  if (internals && internals.actions && internals.commands && internals.contextkey) {
+    const { MenuRegistry, MenuId } = internals.actions
+    const { CommandsRegistry } = internals.commands
+    const { ContextKeyExpr } = internals.contextkey
+    enabledContextKey = editor.createContextKey(CONTEXT_KEY, enabled)
+    positionBelowContextKey = editor.createContextKey(POSITION_BELOW_KEY, position === 'below')
+    positionAboveContextKey = editor.createContextKey(POSITION_ABOVE_KEY, position === 'above')
+    positionEndContextKey = editor.createContextKey(POSITION_END_KEY, position === 'end')
+    SIZE_SCALES.forEach(s => {
+      sizeContextKeys[s] = editor.createContextKey(SIZE_POSITION_KEY_PREFIX + s, s === sizeScale)
+    })
+    const editorWhen = ContextKeyExpr.equals('editorId', editor.getId())
+
+    CommandsRegistry.registerCommand(COMMAND_ID, () => toggle())
+    MenuRegistry.appendMenuItem(MenuId.EditorContext, {
+      command: {
+        id: COMMAND_ID,
+        title: '固定图片预览',
+        toggled: { condition: ContextKeyExpr.equals(CONTEXT_KEY, true) },
+      },
+      when: editorWhen,
+      group: '1_modification',
+      order: 0,
+    })
+
+    CommandsRegistry.registerCommand(COMMAND_BELOW, () => setPosition('below'))
+    MenuRegistry.appendMenuItem(MenuId.EditorContext, {
+      command: {
+        id: COMMAND_BELOW,
+        title: '图片显示在行下方',
+        toggled: { condition: ContextKeyExpr.equals(POSITION_BELOW_KEY, true) },
+      },
+      when: ContextKeyExpr.and(editorWhen, ContextKeyExpr.equals(CONTEXT_KEY, true)),
+      group: '1_modification',
+      order: 1,
+    })
+
+    CommandsRegistry.registerCommand(COMMAND_ABOVE, () => setPosition('above'))
+    MenuRegistry.appendMenuItem(MenuId.EditorContext, {
+      command: {
+        id: COMMAND_ABOVE,
+        title: '图片显示在行上方',
+        toggled: { condition: ContextKeyExpr.equals(POSITION_ABOVE_KEY, true) },
+      },
+      when: ContextKeyExpr.and(editorWhen, ContextKeyExpr.equals(CONTEXT_KEY, true)),
+      group: '1_modification',
+      order: 2,
+    })
+
+    CommandsRegistry.registerCommand(COMMAND_END, () => setPosition('end'))
+    MenuRegistry.appendMenuItem(MenuId.EditorContext, {
+      command: {
+        id: COMMAND_END,
+        title: '图片浮动在行尾',
+        toggled: { condition: ContextKeyExpr.equals(POSITION_END_KEY, true) },
+      },
+      when: ContextKeyExpr.and(editorWhen, ContextKeyExpr.equals(CONTEXT_KEY, true)),
+      group: '1_modification',
+      order: 3,
+    })
+
+    SIZE_SCALES.forEach((scale, index) => {
+      const commandId = SIZE_COMMAND_PREFIX + scale
+      CommandsRegistry.registerCommand(commandId, () => setSize(scale))
+      MenuRegistry.appendMenuItem(MenuId.EditorContext, {
+        command: {
+          id: commandId,
+          title: '图片最大高度 ' + scale + ' 倍行高',
+          toggled: { condition: ContextKeyExpr.equals(SIZE_POSITION_KEY_PREFIX + scale, true) },
+        },
+        when: ContextKeyExpr.and(editorWhen, ContextKeyExpr.equals(CONTEXT_KEY, true)),
+        group: '2_weditor_size',
+        order: index,
+      })
+    })
+  } else {
+    editor.addAction({
+      id: COMMAND_ID,
+      label: '固定图片预览' + (enabled ? '  ✓' : ''),
+      contextMenuGroupId: '1_modification',
+      contextMenuOrder: 0,
+      run: toggle,
+    })
+    editor.addAction({
+      id: COMMAND_BELOW,
+      label: '图片显示在行下方' + (position === 'below' ? '  ✓' : ''),
+      contextMenuGroupId: '1_modification',
+      contextMenuOrder: 1,
+      run: () => setPosition('below'),
+    })
+    editor.addAction({
+      id: COMMAND_ABOVE,
+      label: '图片显示在行上方' + (position === 'above' ? '  ✓' : ''),
+      contextMenuGroupId: '1_modification',
+      contextMenuOrder: 2,
+      run: () => setPosition('above'),
+    })
+    editor.addAction({
+      id: COMMAND_END,
+      label: '图片浮动在行尾' + (position === 'end' ? '  ✓' : ''),
+      contextMenuGroupId: '1_modification',
+      contextMenuOrder: 3,
+      run: () => setPosition('end'),
+    })
+    SIZE_SCALES.forEach((scale, index) => {
+      editor.addAction({
+        id: SIZE_COMMAND_PREFIX + scale,
+        label: '图片最大高度 ' + scale + ' 倍行高' + (sizeScale === scale ? '  ✓' : ''),
+        contextMenuGroupId: '2_weditor_size',
+        contextMenuOrder: index,
+        run: () => setSize(scale),
+      })
+    })
+  }
+
+  editor.onDidChangeModelContent(scheduleRebuild)
+  if (enabled) rebuild()
+}
+
 ctx.initMonaco = function initMonaco() {
   return new Promise((resolve) => {
     require.config({ paths: { vs: '/static/vendor/monaco/vs' } })
@@ -489,7 +858,9 @@ ctx.initMonaco = function initMonaco() {
         editor.code.value = monacoEditor.getValue()
         markFileDirty()
         // 手动改代码等同于结束当前命令，避免填充状态残留导致 Screen 停在框选模式。
-        if ((!coordFillEditing && coordFillRange) || templateFillRange) clearActiveCommand()
+        if (activeCommand.value === 'coord' || activeCommand.value === 'template') {
+          if (!coordFillEditing) clearActiveCommand()
+        } else if ((!coordFillEditing && coordFillRange) || templateFillRange) clearActiveCommand()
       })
       monacoEditor.onDidChangeCursorSelection((e) => {
         const s = e.selection
@@ -541,7 +912,22 @@ ctx.initMonaco = function initMonaco() {
       })
       ctx.installSuggestHover(monacoEditor)
       ctx.installTemplatePreview(monacoEditor)
-      resolve()
+      require([
+        'vs/platform/actions/common/actions',
+        'vs/platform/commands/common/commands',
+        'vs/platform/contextkey/common/contextkey',
+      ], function (actions, commands, contextkey) {
+        ctx.installTemplateInlineImages(monacoEditor, {
+          monaco: monaco,
+          actions: actions,
+          commands: commands,
+          contextkey: contextkey,
+        })
+        resolve()
+      }, function () {
+        ctx.installTemplateInlineImages(monacoEditor, { monaco: monaco })
+        resolve()
+      })
     })
   })
 }

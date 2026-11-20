@@ -25,6 +25,18 @@
 
   const CODING_ACTIONS = [
     {
+      id: 'coord', label: '坐标', name: '插入坐标', group: 'action',
+      description: '双击 Screen 获取坐标，替换为 (x, y)；无选中时插入到光标处。',
+      code: '(x, y)',
+      icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/></svg>',
+    },
+    {
+      id: 'template', label: '模板', name: '插入模板', group: 'action',
+      description: '在 Screen 框选图像并双击确认，保存模板后替换当前选中内容为模板路径。',
+      code: 'tpl.png',
+      icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2" stroke-dasharray="3 2"/><path d="m5 16 4.5-4.5 3.5 3 2.5-2.5L21 17"/><circle cx="9" cy="8.5" r="1.2"/></svg>',
+    },
+    {
       id: 'touch', label: 'touch', name: '坐标点击', group: 'action',
       description: '插入 touch((x, y)) 代码，双击 Screen 填充坐标。',
       code: 'touch((x, y))',
