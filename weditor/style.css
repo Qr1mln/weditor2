@@ -42,6 +42,7 @@ html, body, body *, body *::before, body *::after {
 .menu-label { font-size: 12px; color: #606266; white-space: nowrap; }
 .menu-switch .el-switch__label { font-size: 12px; }
 .devid { color: #67c23a; font-size: 12px; }
+.settings-hint { margin-left: 10px; font-size: 12px; color: #909399; }
 .main { flex: 1; height: auto; min-height: 0; }
 .pane { border-right: 1px solid #ddd; padding: 8px; overflow: auto; }
 .panel-title { display: flex; align-items: center; gap: 8px; font-weight: bold; margin-bottom: 8px; }
@@ -76,6 +77,7 @@ html, body, body *, body *::before, body *::after {
   border-bottom: 1px solid #eee;
 }
 .screen-toolbar .el-input { min-width: 120px; }
+.connection-settings-status { margin: 4px 0 6px; font-size: 12px; color: #909399; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .screen-area {
   flex: 1;
   min-height: 0;

@@ -3,39 +3,18 @@ window.WEditorTemplate = `      <el-container class="layout">
         <el-header class="header menu-bar">
           <span class="brand">WEditor <small>{{ version }}</small></span>
           <div class="menu-groups">
-            <div class="menu-switch" :title="screenModeTitle">
-              <span class="menu-label">投屏</span>
-              <el-switch
-                :model-value="screenMode === 'minicap'"
-                :disabled="minicapConnecting"
-                active-text="minicap"
-                inactive-text="截图"
-                @change="toggleScreenMode"
-              />
-            </div>
-
-            <el-button size="small" type="primary" :loading="device.connecting.value" @click="doConnect">Connect</el-button>
-            <span class="menu-label">自动连接</span>
-            <el-switch
-              v-model="device.autoConnect.value"
-              size="small"
-              title="开启后，连接地址不为空时自动连接"
-            />
             <el-button size="small" :loading="device.loading.value" @click="dumpHierarchy">Dump</el-button>
+            <el-button size="small" @click="settingsVisible = true">设置</el-button>
           </div>
         </el-header>
 
         <el-container class="main">
           <el-aside :width="screenPaneWidth" class="pane screen-pane">
             <div class="screen-toolbar">
-              <el-select v-model="device.platform.value" size="small" style="width: 128px">
-                <el-option label="Android AirTest" value="Android" />
-                <el-option label="Android ADB" value="AndroidADB" />
-                <el-option label="iOS" value="iOS" />
-              </el-select>
               <el-input v-model="device.serial.value" size="small" placeholder="device url" style="width: 150px" />
-              <span v-if="device.deviceId.value" class="devid">{{ device.deviceId.value }}</span>
+              <el-button size="small" type="primary" :loading="device.connecting.value" @click="doConnect">Connect</el-button>
             </div>
+            <div class="connection-settings-status" :title="connectionSettingsText">{{ connectionSettingsText }}</div>
             <div class="panel-title">
               Screen
               <div class="screen-meta" :title="screenMetaText">{{ screenMetaText }}</div>
@@ -326,5 +305,44 @@ window.WEditorTemplate = `      <el-container class="layout">
           <button type="button" @click="contextRename">重命名</button>
           <button type="button" class="danger" @click="contextDelete">删除</button>
         </div>
+
+        <el-dialog v-model="settingsVisible" title="设置" width="420px" :close-on-click-modal="false">
+          <el-form label-width="96px" size="small">
+            <el-tabs>
+              <el-tab-pane label="连接设置">
+                <el-form-item label="历史连接">
+                  <el-select size="small" placeholder="历史连接" style="width: 100%">
+                  </el-select>
+                </el-form-item>
+                <el-form-item label="连接方式">
+                  <el-select v-model="device.platform.value" size="small" style="width: 100%">
+                    <el-option label="Android AirTest" value="Android" />
+                    <el-option label="Android ADB" value="AndroidADB" />
+                    <el-option label="iOS" value="iOS" />
+                  </el-select>
+                </el-form-item>
+                <el-form-item label="自动连接">
+                  <el-switch
+                    v-model="device.autoConnect.value"
+                    size="small"
+                    title="开启后，连接地址不为空时自动连接"
+                  />
+                  <span class="settings-hint">连接地址不为空时自动连接</span>
+                </el-form-item>
+              </el-tab-pane>
+              <el-tab-pane label="投屏设置">
+                <el-form-item label="投屏方式">
+                  <el-switch
+                    :model-value="screenMode === 'minicap'"
+                    :disabled="minicapConnecting"
+                    active-text="minicap"
+                    inactive-text="截图"
+                    @change="toggleScreenMode"
+                  />
+                </el-form-item>
+              </el-tab-pane>
+            </el-tabs>
+          </el-form>
+        </el-dialog>
       </el-container>
 `

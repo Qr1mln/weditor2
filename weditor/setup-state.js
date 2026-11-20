@@ -28,6 +28,7 @@ with (ctx) {
     loadToolbarPosition: P.loadToolbarPosition, saveToolbarPosition: P.saveToolbarPosition,
   })
 ctx.version = ref('...')
+ctx.settingsVisible = ref(false)
 ctx.screenImg = ref(null)
 ctx.screenReady = ref(false)
 ctx.selectedNode = ref(null)
@@ -142,6 +143,11 @@ ctx.toolbarStyle = computed(() => ({
   transform: `translate3d(${toolbarPos.value.x}px, ${toolbarPos.value.y}px, 0)`,
 }))
 ctx.screenModeLabel = computed(() => screenMode.value === 'minicap' ? 'minicap' : '截图')
+ctx.platformLabel = computed(() => ({
+  Android: 'Android AirTest', AndroidADB: 'Android ADB', iOS: 'iOS',
+})[device.platform.value] || device.platform.value)
+ctx.connectionSettingsText = computed(() =>
+  [platformLabel.value, screenModeLabel.value, device.autoConnect.value ? '自动连接' : '手动连接'].join(' · '))
 ctx.screenModeTitle = computed(() => screenMode.value === 'minicap'
   ? '当前：minicap 实时投屏，点击切换到截图'
   : '当前：截图投屏，点击切换到 minicap')
