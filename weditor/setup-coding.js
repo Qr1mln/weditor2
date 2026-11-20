@@ -338,6 +338,122 @@ ctx.installSuggestHover = function installSuggestHover(editor) {
   if (editor && editor.onDidBlurEditorWidget) editor.onDidBlurEditorWidget(hide)
 }
 
+ctx.installTemplatePreview = function installTemplatePreview(editor) {
+  const panel = document.createElement('div')
+  panel.className = 'weditor-template-preview'
+  panel.style.display = 'none'
+  const img = document.createElement('img')
+  img.alt = ''
+  const caption = document.createElement('div')
+  caption.className = 'template-preview-caption'
+  panel.appendChild(img)
+  panel.appendChild(caption)
+  document.body.appendChild(panel)
+
+  const cache = new Map()
+  let hoverRange = null
+  let lastPoint = null
+  let loadToken = 0
+
+  function hide() {
+    loadToken++
+    panel.style.display = 'none'
+    hoverRange = null
+    lastPoint = null
+  }
+
+  function showAt(x, y) {
+    panel.style.display = 'block'
+    const rect = panel.getBoundingClientRect()
+    const m = 8
+    const gap = 14
+    let left = x + gap
+    let top = y + gap
+    if (left + rect.width > window.innerWidth - m) left = x - rect.width - gap
+    if (top + rect.height > window.innerHeight - m) top = y - rect.height - gap
+    left = Math.max(m, Math.min(left, window.innerWidth - rect.width - m))
+    top = Math.max(m, Math.min(top, window.innerHeight - rect.height - m))
+    panel.style.left = Math.round(left) + 'px'
+    panel.style.top = Math.round(top) + 'px'
+  }
+
+  img.onload = () => {
+    if (panel.style.display === 'block' && lastPoint) showAt(lastPoint.x, lastPoint.y)
+  }
+
+  function load(path) {
+    const filename = String(path).split(/[\\/]/).pop() || ''
+    const asset = (templateAssets.value || []).find(a => a.path === path || a.filename === filename)
+    const url = (asset && asset.url) || (filename ? '/widgets/templates/' + encodeURIComponent(filename) : '')
+    if (!url) return Promise.resolve(null)
+    return new Promise(resolve => {
+      const probe = new Image()
+      probe.onload = () => resolve({ url, filename, size: asset && asset.size })
+      probe.onerror = () => resolve(null)
+      probe.src = url
+    })
+  }
+
+  function prepare(path) {
+    if (!cache.has(path)) cache.set(path, load(path))
+    return cache.get(path)
+  }
+
+  function findPathAt(line, column) {
+    const re = /Template\s*\(\s*(['"])(.*?)\1/g
+    let match
+    while ((match = re.exec(line)) !== null) {
+      const quote = match[1]
+      const path = match[2]
+      const start = match.index + match[0].indexOf(quote) + 1
+      const startColumn = start + 1
+      const endColumn = start + path.length + 1
+      if (path && column >= startColumn && column <= endColumn) {
+        return { path, startColumn, endColumn }
+      }
+    }
+    return null
+  }
+
+  editor.onMouseMove((e) => {
+    const browserEvent = e.event && e.event.browserEvent
+    const pos = e.target && e.target.position
+    if (!browserEvent || !pos) {
+      hide()
+      return
+    }
+    const model = editor.getModel()
+    if (!model) { hide(); return }
+    const found = findPathAt(model.getLineContent(pos.lineNumber), pos.column)
+    if (!found) { hide(); return }
+    lastPoint = { x: browserEvent.clientX, y: browserEvent.clientY }
+    if (hoverRange && hoverRange.lineNumber === pos.lineNumber
+      && hoverRange.startColumn === found.startColumn
+      && hoverRange.endColumn === found.endColumn) {
+      if (panel.style.display === 'block') showAt(lastPoint.x, lastPoint.y)
+      return
+    }
+    hoverRange = {
+      lineNumber: pos.lineNumber,
+      startColumn: found.startColumn,
+      endColumn: found.endColumn,
+    }
+    const token = ++loadToken
+    prepare(found.path).then((data) => {
+      if (token !== loadToken) return
+      if (!data) { hide(); return }
+      img.src = data.url
+      caption.textContent = data.filename
+        + (data.size ? '  ·  ' + (data.size / 1024).toFixed(1) + ' KB' : '')
+      showAt(lastPoint.x, lastPoint.y)
+    })
+  })
+  editor.onMouseLeave(hide)
+  editor.onDidChangeModelContent(hide)
+  document.addEventListener('mousedown', hide)
+  window.addEventListener('scroll', hide, true)
+}
+
 ctx.initMonaco = function initMonaco() {
   return new Promise((resolve) => {
     require.config({ paths: { vs: '/static/vendor/monaco/vs' } })
@@ -424,6 +540,7 @@ ctx.initMonaco = function initMonaco() {
         },
       })
       ctx.installSuggestHover(monacoEditor)
+      ctx.installTemplatePreview(monacoEditor)
       resolve()
     })
   })

@@ -577,3 +577,35 @@ body.toolbar-dragging, body.toolbar-dragging * {
   color: #ce9178;
 }
 .weditor-suggest-tip .tip-bullet { color: #dcdcaa; }
+
+/* Monaco 代码中 Template 路径 hover 图片预览（纯展示，不响应鼠标） */
+.weditor-template-preview {
+  position: fixed;
+  z-index: 5100;
+  display: none;
+  max-width: 380px;
+  max-height: 380px;
+  padding: 6px;
+  border: 1px solid #454545;
+  border-radius: 4px;
+  background: #252526;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .5);
+  pointer-events: none;
+}
+.weditor-template-preview img {
+  display: block;
+  max-width: 360px;
+  max-height: 340px;
+  object-fit: contain;
+  background: #1e1e1e;
+}
+.weditor-template-preview .template-preview-caption {
+  margin-top: 4px;
+  color: #d4d4d4;
+  font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
